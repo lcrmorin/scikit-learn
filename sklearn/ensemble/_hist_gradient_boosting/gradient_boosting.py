@@ -151,6 +151,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         "max_depth": [Interval(Integral, 1, None, closed="left"), None],
         "min_samples_leaf": [Interval(Integral, 1, None, closed="left")],
         "l2_regularization": [Interval(Real, 0, None, closed="left")],
+        "cat_smooth": [Interval(Real, 0, None, closed="left")],
         "max_features": [Interval(RealNotInt, 0, 1, closed="right")],
         "monotonic_cst": ["array-like", dict, None],
         "interaction_cst": [
@@ -186,6 +187,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         max_depth,
         min_samples_leaf,
         l2_regularization,
+        cat_smooth,
         max_features,
         max_bins,
         categorical_features,
@@ -207,6 +209,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
         self.l2_regularization = l2_regularization
+        self.cat_smooth = cat_smooth
         self.max_features = max_features
         self.max_bins = max_bins
         self.monotonic_cst = monotonic_cst
@@ -833,6 +836,7 @@ class BaseHistGradientBoosting(BaseEstimator, ABC):
                     max_depth=self.max_depth,
                     min_samples_leaf=self.min_samples_leaf,
                     l2_regularization=self.l2_regularization,
+                    cat_smooth=self.cat_smooth,
                     feature_fraction_per_split=self.max_features,
                     rng=self._feature_subsample_rng,
                     shrinkage=self.learning_rate,
@@ -1425,6 +1429,17 @@ class HistGradientBoostingRegressor(RegressorMixin, BaseHistGradientBoosting):
     l2_regularization : float, default=0
         The L2 regularization parameter penalizing leaves with small hessians.
         Use ``0`` for no regularization (default).
+    cat_smooth : float, default=10.0
+        Smoothing parameter used when finding the best split for categorical
+        features. Categories with a sum of hessians below this value
+        (rescaled by the ratio of the total number of samples to the total
+        sum of hessians at the node) are excluded from the categorical split
+        search and are always routed to the right child. Higher values give
+        more weight to categories with few samples, reducing the effect of
+        noisy, low-support categories. Called ``cat_smooth`` in LightGBM.
+
+        .. versionadded:: 1.10
+
     max_features : float, default=1.0
         Proportion of randomly chosen features in each and every node split.
         This is a form of regularization, smaller values make the trees weaker
@@ -1653,6 +1668,7 @@ class HistGradientBoostingRegressor(RegressorMixin, BaseHistGradientBoosting):
         max_depth=None,
         min_samples_leaf=20,
         l2_regularization=0.0,
+        cat_smooth=10.0,
         max_features=1.0,
         max_bins=255,
         categorical_features="from_dtype",
@@ -1675,6 +1691,7 @@ class HistGradientBoostingRegressor(RegressorMixin, BaseHistGradientBoosting):
             max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization,
+            cat_smooth=cat_smooth,
             max_features=max_features,
             max_bins=max_bins,
             monotonic_cst=monotonic_cst,
@@ -1817,6 +1834,17 @@ class HistGradientBoostingClassifier(ClassifierMixin, BaseHistGradientBoosting):
     l2_regularization : float, default=0
         The L2 regularization parameter penalizing leaves with small hessians.
         Use ``0`` for no regularization (default).
+    cat_smooth : float, default=10.0
+        Smoothing parameter used when finding the best split for categorical
+        features. Categories with a sum of hessians below this value
+        (rescaled by the ratio of the total number of samples to the total
+        sum of hessians at the node) are excluded from the categorical split
+        search and are always routed to the right child. Higher values give
+        more weight to categories with few samples, reducing the effect of
+        noisy, low-support categories. Called ``cat_smooth`` in LightGBM.
+
+        .. versionadded:: 1.10
+
     max_features : float, default=1.0
         Proportion of randomly chosen features in each and every node split.
         This is a form of regularization, smaller values make the trees weaker
@@ -2045,6 +2073,7 @@ class HistGradientBoostingClassifier(ClassifierMixin, BaseHistGradientBoosting):
         max_depth=None,
         min_samples_leaf=20,
         l2_regularization=0.0,
+        cat_smooth=10.0,
         max_features=1.0,
         max_bins=255,
         categorical_features="from_dtype",
@@ -2068,6 +2097,7 @@ class HistGradientBoostingClassifier(ClassifierMixin, BaseHistGradientBoosting):
             max_depth=max_depth,
             min_samples_leaf=min_samples_leaf,
             l2_regularization=l2_regularization,
+            cat_smooth=cat_smooth,
             max_features=max_features,
             max_bins=max_bins,
             categorical_features=categorical_features,

@@ -153,6 +153,11 @@ cdef class Splitter:
     min_gain_to_split : float, default=0.0
         The minimum gain needed to split a node. Splits with lower gain will
         be ignored.
+    cat_smooth : float, default=10.0
+        Smoothing parameter for categorical splits. Categories whose sum of
+        hessians, rescaled by ``n_samples / sum_hessians``, is below this
+        value are excluded from the categorical split search and always
+        routed to the right child. Called ``cat_smooth`` in LightGBM.
     hessians_are_constant: bool, default is False
         Whether hessians are constant.
     feature_fraction_per_split : float, default=1
@@ -176,6 +181,7 @@ cdef class Splitter:
         Y_DTYPE_C min_hessian_to_split
         unsigned int min_samples_leaf
         Y_DTYPE_C min_gain_to_split
+        Y_DTYPE_C cat_smooth
         Y_DTYPE_C feature_fraction_per_split
         rng
 
@@ -195,6 +201,7 @@ cdef class Splitter:
                  Y_DTYPE_C min_hessian_to_split=1e-3,
                  unsigned int min_samples_leaf=20,
                  Y_DTYPE_C min_gain_to_split=0.,
+                 Y_DTYPE_C cat_smooth=10.,
                  uint8_t hessians_are_constant=False,
                  Y_DTYPE_C feature_fraction_per_split=1.0,
                  rng=np.random.RandomState(),
@@ -211,6 +218,7 @@ cdef class Splitter:
         self.min_hessian_to_split = min_hessian_to_split
         self.min_samples_leaf = min_samples_leaf
         self.min_gain_to_split = min_gain_to_split
+        self.cat_smooth = cat_smooth
         self.hessians_are_constant = hessians_are_constant
         self.feature_fraction_per_split = feature_fraction_per_split
         self.rng = rng
@@ -795,8 +803,8 @@ cdef class Splitter:
             unsigned int best_cat_infos_thresh
             # Reduces the effect of noises in categorical features,
             # especially for categories with few data. Called cat_smooth in
-            # LightGBM. TODO: Make this user adjustable?
-            Y_DTYPE_C MIN_CAT_SUPPORT = 10.
+            # LightGBM.
+            Y_DTYPE_C MIN_CAT_SUPPORT = self.cat_smooth
             # this is equal to 1 for losses where hessians are constant
             Y_DTYPE_C support_factor = n_samples / sum_hessians
 

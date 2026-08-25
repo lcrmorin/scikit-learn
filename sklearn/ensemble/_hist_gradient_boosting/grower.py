@@ -173,6 +173,11 @@ class TreeGrower:
     min_gain_to_split : float, default=0.
         The minimum gain needed to split a node. Splits with lower gain will
         be ignored.
+    cat_smooth : float, default=10.0
+        Smoothing parameter for categorical splits. Categories whose sum of
+        hessians, rescaled by ``n_samples / sum_hessians``, is below this
+        value are excluded from the categorical split search and always
+        routed to the right child. Called ``cat_smooth`` in LightGBM.
     min_hessian_to_split : float, default=1e-3
         The minimum sum of hessians needed in each node. Splits that result in
         at least one child having a sum of hessians less than
@@ -250,6 +255,7 @@ class TreeGrower:
         max_depth=None,
         min_samples_leaf=20,
         min_gain_to_split=0.0,
+        cat_smooth=10.0,
         min_hessian_to_split=1e-3,
         n_bins=256,
         n_bins_non_missing=None,
@@ -267,6 +273,7 @@ class TreeGrower:
             X_binned,
             min_gain_to_split,
             min_hessian_to_split,
+            cat_smooth,
         )
         n_threads = _openmp_effective_n_threads(n_threads)
 
@@ -325,6 +332,7 @@ class TreeGrower:
             min_hessian_to_split=min_hessian_to_split,
             min_samples_leaf=min_samples_leaf,
             min_gain_to_split=min_gain_to_split,
+            cat_smooth=cat_smooth,
             hessians_are_constant=hessians_are_constant,
             feature_fraction_per_split=feature_fraction_per_split,
             rng=rng,
@@ -335,6 +343,7 @@ class TreeGrower:
         self.max_depth = max_depth
         self.min_samples_leaf = min_samples_leaf
         self.min_gain_to_split = min_gain_to_split
+        self.cat_smooth = cat_smooth
         self.n_bins_non_missing = n_bins_non_missing
         self.missing_values_bin_idx = missing_values_bin_idx
         self.has_missing_values = has_missing_values
@@ -359,6 +368,7 @@ class TreeGrower:
         X_binned,
         min_gain_to_split,
         min_hessian_to_split,
+        cat_smooth,
     ):
         """Validate parameters passed to __init__.
 
@@ -375,6 +385,8 @@ class TreeGrower:
             raise ValueError(
                 "min_gain_to_split={} must be positive.".format(min_gain_to_split)
             )
+        if cat_smooth < 0:
+            raise ValueError("cat_smooth={} must be positive.".format(cat_smooth))
         if min_hessian_to_split < 0:
             raise ValueError(
                 "min_hessian_to_split={} must be positive.".format(min_hessian_to_split)
