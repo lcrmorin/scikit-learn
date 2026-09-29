@@ -1394,9 +1394,28 @@ def test_ohe_infrequent_user_cats_unknown_training_errors(kwargs):
 
 # deliberately omit 'OS' as an invalid combo
 @pytest.mark.parametrize(
-    "input_dtype, category_dtype", ["OO", "OU", "UO", "UU", "SO", "SU", "SS"]
+    "input_dtype, category_dtype, array_type",
+    [
+        (a, b, container)
+        for a, b in ["OO", "OU", "UO", "UU", "SO", "SU", "SS"]
+        for container in ["list", "array", "pandas"]
+    ]
+    + [
+        pytest.param(
+            a,
+            b,
+            "array",
+            marks=pytest.mark.xfail(
+                reason="Explicit categories apply isnan to StringDType labels (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        )
+        if a == "T"
+        else (a, b, "array")
+        for a, b in ["TT", "TU", "TO", "UT", "OT"]
+    ],
 )
-@pytest.mark.parametrize("array_type", ["list", "array", "pandas"])
 def test_encoders_string_categories(input_dtype, category_dtype, array_type):
     """Check that encoding work with object, unicode, and byte string dtypes.
     Non-regression test for:
@@ -1405,6 +1424,8 @@ def test_encoders_string_categories(input_dtype, category_dtype, array_type):
     https://github.com/scikit-learn/scikit-learn/issues/19677
     """
 
+    if "T" in (input_dtype, category_dtype):
+        pytest.importorskip("numpy", minversion="2.0")
     X = np.array([["b"], ["a"]], dtype=input_dtype)
     categories = [np.array(["b", "a"], dtype=category_dtype)]
     ohe = OneHotEncoder(categories=categories, sparse_output=False).fit(X)
@@ -2469,3 +2490,53 @@ def test_ohe_unknown_warning_mixed_infrequent_columns(handle_unknown):
     with pytest.warns(UserWarning, match=warn_msg):
         X_trans = ohe.transform(X_test)
     assert_allclose(X_trans, X_expected)
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+def test_encoders_string_dtype_round_trip(numpy_string_dtype, Encoder):
+    X = np.array([["a"], ["longer"], ["é"], ["a"]], dtype=numpy_string_dtype)
+    encoder = Encoder()
+    encoded = encoder.fit_transform(X)
+    assert_array_equal(encoder.inverse_transform(encoded), X)
+    assert_array_equal(encoder.categories_[0], ["a", "longer", "é"])
+    with pytest.raises(ValueError, match="unknown categories"):
+        encoder.transform(np.array([["new"]], dtype=numpy_string_dtype))
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+def test_encoders_string_dtype_unknown(numpy_string_dtype, Encoder):
+    X = np.array([["a"], ["b"]], dtype=numpy_string_dtype)
+    X_test = np.array([["b"], ["new"]], dtype=numpy_string_dtype)
+    if Encoder is OneHotEncoder:
+        encoder = Encoder(handle_unknown="ignore", sparse_output=False).fit(X)
+        assert_array_equal(encoder.transform(X_test), [[0, 1], [0, 0]])
+    else:
+        encoder = Encoder(handle_unknown="use_encoded_value", unknown_value=-1).fit(X)
+        assert_array_equal(encoder.transform(X_test), [[1], [-1]])
+
+
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "O",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="StringDType unique mishandles NaN sentinel (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_ordinal_encoder_string_dtype_missing_unknown(numpy_string_dtype):
+    dtype = numpy_string_dtype
+    if dtype.kind == "T":
+        dtype = np.dtypes.StringDType(na_object=np.nan)
+    X = np.array([["a"], ["b"], [np.nan]], dtype=dtype)
+    encoder = OrdinalEncoder(
+        handle_unknown="use_encoded_value", unknown_value=-1, encoded_missing_value=-2
+    ).fit(X)
+    X_test = np.array([["b"], [np.nan], ["new"]], dtype=dtype)
+    assert_array_equal(encoder.transform(X_test), [[1], [-2], [-1]])
