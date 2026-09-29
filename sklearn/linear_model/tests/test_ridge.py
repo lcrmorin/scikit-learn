@@ -2709,3 +2709,33 @@ def test_set_score_request_with_default_scoring(metaestimator, make_dataset):
 
 # End of Metadata Routing Tests
 # =============================
+
+
+@pytest.mark.parametrize("Classifier", [RidgeClassifier, RidgeClassifierCV])
+@pytest.mark.parametrize("n_classes", [2, 3])
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "U",
+        "O",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="LabelBinarizer unique cache rejects StringDType (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_ridge_classifier_string_dtype(numpy_string_dtype, Classifier, n_classes):
+    mask = y_iris < n_classes
+    X = X_iris[mask]
+    labels = np.array(["class a", "class b", "class c"])[y_iris[mask]]
+    y = np.asarray(labels, dtype=numpy_string_dtype)
+    classifier = Classifier().fit(X, y)
+    reference = Classifier().fit(X, labels)
+    assert_array_equal(classifier.classes_, reference.classes_)
+    assert_array_equal(classifier.predict(X), reference.predict(X))
+    assert_allclose(classifier.decision_function(X), reference.decision_function(X))
