@@ -930,3 +930,70 @@ def test_label_encoder_array_api_compliance(
         assert_array_equal(
             move_to(xp_label.classes_, xp=np, device="cpu"), np_label.classes_
         )
+
+
+def test_label_encoder_string_dtype(numpy_string_dtype):
+    values = np.array(["b", "a", "longer", "a"], dtype=numpy_string_dtype)
+    encoder = LabelEncoder()
+    encoded = encoder.fit_transform(values)
+    assert_array_equal(encoded, [1, 0, 2, 0])
+    assert_array_equal(encoder.classes_, ["a", "b", "longer"])
+    assert_array_equal(encoder.transform(values), encoded)
+    assert_array_equal(encoder.inverse_transform(encoded), values)
+    with pytest.raises(ValueError, match="unseen labels"):
+        encoder.transform(np.array(["unknown"], dtype=numpy_string_dtype))
+
+
+@pytest.mark.parametrize("values", [["a", "a"], ["a", "b", "a"], ["a", "c", "b"]])
+@pytest.mark.parametrize("sparse_output", [False, True])
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "U",
+        "O",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="Unique cache cannot attach StringDType metadata (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_label_binarizer_string_dtype(numpy_string_dtype, values, sparse_output):
+    y = np.array(values, dtype=numpy_string_dtype)
+    encoder = LabelBinarizer(sparse_output=sparse_output)
+    encoded = encoder.fit_transform(y)
+    reference = LabelBinarizer(sparse_output=sparse_output).fit_transform(values)
+    assert_array_equal(toarray(encoded), toarray(reference))
+    assert_array_equal(encoder.inverse_transform(encoded), values)
+
+
+@pytest.mark.parametrize(
+    "numpy_string_dtype, classes_dtype",
+    [
+        pytest.param(
+            a,
+            b,
+            marks=pytest.mark.xfail(
+                reason="searchsorted cannot mix StringDType and Unicode (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        )
+        if {a, b} == {"U", "T"}
+        else (a, b)
+        for a in ["U", "O", "T"]
+        for b in ["U", "O", "T"]
+    ],
+    indirect=["numpy_string_dtype"],
+)
+def test_label_binarize_mixed_string_dtypes(numpy_string_dtype, classes_dtype):
+    if classes_dtype == "T":
+        pytest.importorskip("numpy", minversion="2.0")
+    y = np.array(["b", "a", "c"], dtype=numpy_string_dtype)
+    classes = np.array(["c", "b", "a"], dtype=classes_dtype)
+    result = label_binarize(y, classes=classes)
+    assert_array_equal(result, [[0, 1, 0], [0, 0, 1], [1, 0, 0]])
