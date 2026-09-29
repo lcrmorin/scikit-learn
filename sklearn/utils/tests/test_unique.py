@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from sklearn.utils._unique import attach_unique, cached_unique
@@ -52,3 +53,28 @@ def test_check_array_keeps_unique():
     arr_ = check_array(arr_)
     assert_array_equal(arr_.dtype.metadata["unique"], np.array([1, 2, 3, 4, 5]))
     assert_array_equal(arr_, arr)
+
+
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "U",
+        "O",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="Unique cache cannot attach StringDType metadata (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_unique_string_dtypes(numpy_string_dtype):
+    arr = np.array(["b", "a", "b"], dtype=numpy_string_dtype)
+    attached = attach_unique(arr)
+    assert_array_equal(attached, arr)
+    assert attached.dtype == arr.dtype
+    # Caching is optional for dtypes that cannot carry metadata.
+    assert_array_equal(cached_unique(attached), ["a", "b"])

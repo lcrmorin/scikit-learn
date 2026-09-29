@@ -235,3 +235,45 @@ def test_get_counts_multiple_nans():
     # themselves. So compare as Python lists:
     assert list(uniques) == list(real_uniques)
     assert_array_equal(real_counts, expected_counts)
+
+
+@pytest.mark.parametrize("encode", [_encode, _encode_labels])
+def test_encode_string_dtypes(numpy_string_dtype, encode):
+    values = np.array(["b", "a", "c", "a", "c"], dtype=numpy_string_dtype)
+    uniques, inverse, counts = _unique(values, return_inverse=True, return_counts=True)
+    assert_array_equal(uniques, ["a", "b", "c"])
+    assert_array_equal(inverse, [1, 0, 2, 0, 2])
+    assert_array_equal(counts, [2, 1, 2])
+    assert_array_equal(encode(values, uniques=uniques), inverse)
+
+
+def test_encode_unknown_string_dtypes(numpy_string_dtype):
+    values = np.array(["b", "unknown", "a"], dtype=numpy_string_dtype)
+    uniques = np.array(["a", "b"], dtype=numpy_string_dtype)
+    encoded, diff = _encode(values, uniques=uniques, return_diff=True)
+    assert_array_equal(encoded, [1, -1, 0])
+    assert_array_equal(diff, ["unknown"])
+    with pytest.raises(ValueError, match="previously unseen labels"):
+        _encode_labels(values, uniques=uniques)
+
+
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "U",
+        "O",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="Counts apply isnan to StringDType labels (#34946)",
+                strict=True,
+                raises=TypeError,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_get_counts_string_dtypes(numpy_string_dtype):
+    values = np.array(["b", "a", "b"], dtype=numpy_string_dtype)
+    uniques = np.array(["a", "b", "c"], dtype=numpy_string_dtype)
+    assert_array_equal(_get_counts(values, uniques), [1, 2, 0])
