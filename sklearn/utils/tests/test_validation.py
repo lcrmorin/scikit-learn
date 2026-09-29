@@ -2558,3 +2558,66 @@ def test_indexable_return_type(constructor_name):
         expected_type = type(X)
     X = indexable(X)[0]
     assert isinstance(X, expected_type)
+
+
+@pytest.mark.parametrize("values", [[["1", "2"]], [["short", "longer"]]])
+@pytest.mark.parametrize(
+    "numpy_string_dtype",
+    [
+        "U",
+        pytest.param(
+            "T",
+            marks=pytest.mark.xfail(
+                reason="StringDType bypasses numeric string rejection (#34946)",
+                strict=True,
+            ),
+        ),
+    ],
+    indirect=True,
+)
+def test_check_array_string_numeric_error(numpy_string_dtype, values):
+    X = np.array(values, dtype=numpy_string_dtype)
+    with pytest.raises(ValueError, match="dtype='numeric'.*bytes/strings"):
+        check_array(X, dtype="numeric")
+
+
+def test_check_array_string_preservation(numpy_string_dtype):
+    values = [["", "longer string"], ["é", "日本語"]]
+    X = np.array(values, dtype=numpy_string_dtype)
+    checked = check_array(X, dtype=None)
+    assert checked.dtype == X.dtype
+    assert_array_equal(checked, values)
+
+
+@pytest.mark.parametrize(
+    "numpy_string_dtype, ensure_all_finite",
+    [
+        ("O", True),
+        ("O", False),
+        ("O", "allow-nan"),
+        pytest.param(
+            "T",
+            True,
+            marks=pytest.mark.xfail(
+                reason="StringDType NaN sentinel bypasses finite validation (#34946)",
+                strict=True,
+            ),
+        ),
+        ("T", False),
+        ("T", "allow-nan"),
+    ],
+    indirect=["numpy_string_dtype"],
+)
+def test_check_array_string_missing(numpy_string_dtype, ensure_all_finite):
+    dtype = numpy_string_dtype
+    if dtype.kind == "T":
+        dtype = np.dtypes.StringDType(na_object=np.nan)
+    X = np.array([["a"], [np.nan]], dtype=dtype)
+    if ensure_all_finite is True:
+        with pytest.raises(ValueError, match="Input contains NaN"):
+            check_array(X, dtype=None, ensure_all_finite=ensure_all_finite)
+    else:
+        checked = check_array(X, dtype=None, ensure_all_finite=ensure_all_finite)
+        assert checked[0, 0] == "a"
+        assert np.isnan(checked[1, 0])
+        assert checked.dtype == X.dtype
