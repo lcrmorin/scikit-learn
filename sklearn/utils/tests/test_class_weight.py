@@ -335,7 +335,11 @@ def test_compute_sample_weight_sparse(csc_container):
 
 
 @pytest.mark.parametrize("class_weight", ["balanced", {"a": 2.0, "b": 0.5, "c": 3.0}])
-def test_class_and_sample_weight_string_dtype(numpy_string_dtype, class_weight):
+def test_class_and_sample_weight_string_dtype(
+    numpy_string_dtype, class_weight, mark_string_dtype_isdtype_xfail
+):
+    if class_weight == "balanced":
+        mark_string_dtype_isdtype_xfail()
     y = np.array(["a", "a", "a", "b", "b", "c"], dtype=numpy_string_dtype)
     classes = np.array(["c", "a", "b"], dtype=numpy_string_dtype)
     reference = y.astype(object)

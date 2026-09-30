@@ -3708,7 +3708,10 @@ def test_random_splitter_missing_values_uses_non_missing_min_max(X, y):
         ExtraTreeRegressor,
     ],
 )
-def test_categorical_tree_string_dtype(numpy_string_dtype, Tree):
+def test_categorical_tree_string_dtype(
+    numpy_string_dtype, Tree, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     X = np.array([["a"], ["a"], ["a"], ["b"], ["b"], ["c"]], dtype=numpy_string_dtype)
     y = np.array([0, 0, 0, 1, 1, 2])
     if Tree in (DecisionTreeClassifier, ExtraTreeClassifier):

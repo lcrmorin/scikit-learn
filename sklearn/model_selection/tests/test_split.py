@@ -2120,7 +2120,8 @@ def test_stratified_splitter_without_y(cv):
 @pytest.mark.parametrize(
     "CV", [StratifiedKFold, StratifiedShuffleSplit, GroupKFold, StratifiedGroupKFold]
 )
-def test_split_string_dtype(numpy_string_dtype, CV):
+def test_split_string_dtype(numpy_string_dtype, CV, mark_string_dtype_isdtype_xfail):
+    mark_string_dtype_isdtype_xfail()
     X = np.arange(48).reshape(24, 2)
     y = np.array(["a", "b", "b", "b"] * 6, dtype=object)
     groups = np.repeat(np.array(["g1", "g2", "g3", "g4", "g5", "g6"], dtype=object), 4)

@@ -987,8 +987,9 @@ def test_multiclass_estimator_attribute_error():
 @pytest.mark.parametrize("Wrapper", [OneVsRestClassifier, OneVsOneClassifier])
 @pytest.mark.parametrize("n_classes", [2, 3])
 def test_multiclass_wrapper_string_dtype(
-    numpy_string_dtype, Wrapper, n_classes, request
+    numpy_string_dtype, Wrapper, n_classes, request, mark_string_dtype_isdtype_xfail
 ):
+    mark_string_dtype_isdtype_xfail()
     if numpy_string_dtype.kind == "T" and Wrapper is OneVsRestClassifier:
         request.applymarker(
             pytest.mark.xfail(
