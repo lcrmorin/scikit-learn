@@ -1413,7 +1413,7 @@ def test_ohe_infrequent_user_cats_unknown_training_errors(kwargs):
         )
         if a == "T"
         else (a, b, "array")
-        for a, b in ["TT", "TU", "TO", "UT", "OT"]
+        for a, b in ["TT", "TU", "TO", "UT", ("O", "T")]
     ],
 )
 def test_encoders_string_categories(input_dtype, category_dtype, array_type):
