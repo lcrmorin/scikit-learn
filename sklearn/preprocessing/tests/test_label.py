@@ -1003,3 +1003,29 @@ def test_label_binarize_mixed_string_dtypes(
     classes = np.array(["c", "b", "a"], dtype=classes_dtype)
     result = label_binarize(y, classes=classes)
     assert_array_equal(result, [[0, 1, 0], [0, 0, 1], [1, 0, 0]])
+
+
+@pytest.mark.parametrize("sparse_output", [False, True])
+@pytest.mark.parametrize("explicit_classes", [False, True])
+def test_multilabel_binarizer_string_dtype(
+    numpy_string_dtype, sparse_output, explicit_classes
+):
+    labels = np.array(["z", "", "é"], dtype=numpy_string_dtype)
+    y = [labels[[0, 2]], labels[[1]], labels[[]]]
+    classes = labels if explicit_classes else None
+    encoder = MultiLabelBinarizer(classes=classes, sparse_output=sparse_output)
+    encoded = encoder.fit_transform(y)
+    dense = encoded.toarray() if sparse_output else encoded
+    assert_array_equal(
+        encoder.classes_, labels if explicit_classes else np.sort(labels)
+    )
+    expected = np.array([[int(c in row) for c in encoder.classes_] for row in y])
+    assert_array_equal(dense, expected)
+    assert [set(row) for row in encoder.inverse_transform(encoded)] == [
+        set(row) for row in y
+    ]
+    with pytest.warns(UserWarning, match="unknown class"):
+        unknown = encoder.transform([np.array(["unseen"], dtype=numpy_string_dtype)])
+    assert_array_equal(
+        unknown.toarray() if sparse_output else unknown, np.zeros((1, 3))
+    )

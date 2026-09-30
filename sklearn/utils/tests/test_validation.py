@@ -2628,3 +2628,23 @@ def test_check_array_string_missing(
         assert checked[0, 0] == "a"
         assert np.isnan(checked[1, 0])
         assert checked.dtype == X.dtype
+
+
+@pytest.mark.parametrize("sentinel", [None, np.nan, "MISSING"])
+def test_string_dtype_sentinel_preservation(sentinel):
+    pytest.importorskip("numpy", minversion="2.0")
+    dtype = np.dtypes.StringDType(na_object=sentinel)
+    X = np.array([[""], ["nan"], ["é"], [sentinel]], dtype=dtype)
+    result = check_array(X, dtype=None, ensure_all_finite=False, copy=True)
+    assert result.dtype == dtype
+    assert result is not X
+    for array in [X, result]:
+        assert array[:3, 0].tolist() == ["", "nan", "é"]
+        if sentinel is None:
+            assert array[3, 0] is None
+        elif isinstance(sentinel, float):
+            assert np.isnan(array[3, 0])
+        else:
+            assert array[3, 0] == sentinel
+    result[0, 0] = "changed"
+    assert X[0, 0] == ""
