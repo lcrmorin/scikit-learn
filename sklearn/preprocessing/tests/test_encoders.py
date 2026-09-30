@@ -2546,3 +2546,29 @@ def test_ordinal_encoder_string_dtype_missing_unknown(numpy_string_dtype):
     ).fit(X)
     X_test = np.array([["b"], [np.nan], ["new"]], dtype=dtype)
     assert_array_equal(encoder.transform(X_test), [[1], [-2], [-1]])
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+@pytest.mark.parametrize("transform_dtype", ["U", "O", "T"])
+def test_encoder_mixed_string_dtype(
+    numpy_string_dtype, Encoder, transform_dtype, mark_string_dtype_isdtype_xfail
+):
+    if transform_dtype == "T":
+        pytest.importorskip("numpy", minversion="2.0")
+    mark_string_dtype_isdtype_xfail()
+    mark_string_dtype_isdtype_xfail(np.dtype(transform_dtype))
+    X = np.array([["z"], [""], ["é"], ["z"]], dtype=numpy_string_dtype)
+    X_test = np.array([["é"], [""], ["z"]], dtype=transform_dtype)
+    original, original_test = X.copy(), X_test.copy()
+    encoder = Encoder().fit(X)
+    reference = Encoder().fit(X.astype(object))
+    result = encoder.transform(X_test)
+    expected = reference.transform(X_test.astype(object))
+    assert_allclose(
+        result.toarray() if hasattr(result, "toarray") else result,
+        expected.toarray() if hasattr(expected, "toarray") else expected,
+    )
+    assert_array_equal(encoder.inverse_transform(result), X_test)
+    assert_array_equal(encoder.categories_[0], reference.categories_[0])
+    assert_array_equal(X, original)
+    assert_array_equal(X_test, original_test)

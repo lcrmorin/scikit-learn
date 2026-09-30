@@ -533,11 +533,12 @@ def numpy_string_dtype(request):
 def mark_string_dtype_isdtype_xfail(request, numpy_string_dtype):
     """Mark tested paths that call isdtype, which rejects strings on older NumPy."""
 
-    def mark():
-        if numpy_string_dtype.kind != "T":
+    def mark(dtype=None):
+        dtype = numpy_string_dtype if dtype is None else dtype
+        if dtype.kind != "T":
             return
         try:
-            np.isdtype(numpy_string_dtype, "real floating")
+            np.isdtype(dtype, "real floating")
         except TypeError:
             request.applymarker(
                 pytest.mark.xfail(
