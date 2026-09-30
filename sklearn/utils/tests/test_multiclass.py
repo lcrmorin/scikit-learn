@@ -694,7 +694,10 @@ def test_labels_in_bytes_format_error(input_type):
         ([["a", "b"], ["b", "c"], ["c", "a"]], "multiclass-multioutput"),
     ],
 )
-def test_string_target_type(numpy_string_dtype, values, expected):
+def test_string_target_type(
+    numpy_string_dtype, values, expected, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     y = np.array(values, dtype=numpy_string_dtype)
     assert type_of_target(y) == expected
     check_classification_targets(y)

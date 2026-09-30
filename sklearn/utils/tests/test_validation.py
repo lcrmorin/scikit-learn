@@ -2581,7 +2581,10 @@ def test_check_array_string_numeric_error(numpy_string_dtype, values):
         check_array(X, dtype="numeric")
 
 
-def test_check_array_string_preservation(numpy_string_dtype):
+def test_check_array_string_preservation(
+    numpy_string_dtype, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     values = [["", "longer string"], ["é", "日本語"]]
     X = np.array(values, dtype=numpy_string_dtype)
     checked = check_array(X, dtype=None)
@@ -2608,7 +2611,11 @@ def test_check_array_string_preservation(numpy_string_dtype):
     ],
     indirect=["numpy_string_dtype"],
 )
-def test_check_array_string_missing(numpy_string_dtype, ensure_all_finite):
+def test_check_array_string_missing(
+    numpy_string_dtype, ensure_all_finite, mark_string_dtype_isdtype_xfail
+):
+    if ensure_all_finite == "allow-nan":
+        mark_string_dtype_isdtype_xfail()
     dtype = numpy_string_dtype
     if dtype.kind == "T":
         dtype = np.dtypes.StringDType(na_object=np.nan)

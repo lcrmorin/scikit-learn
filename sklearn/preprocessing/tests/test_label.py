@@ -932,7 +932,10 @@ def test_label_encoder_array_api_compliance(
         )
 
 
-def test_label_encoder_string_dtype(numpy_string_dtype):
+def test_label_encoder_string_dtype(
+    numpy_string_dtype, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     values = np.array(["b", "a", "longer", "a"], dtype=numpy_string_dtype)
     encoder = LabelEncoder()
     encoded = encoder.fit_transform(values)
@@ -990,7 +993,10 @@ def test_label_binarizer_string_dtype(numpy_string_dtype, values, sparse_output)
     ],
     indirect=["numpy_string_dtype"],
 )
-def test_label_binarize_mixed_string_dtypes(numpy_string_dtype, classes_dtype):
+def test_label_binarize_mixed_string_dtypes(
+    numpy_string_dtype, classes_dtype, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     if classes_dtype == "T":
         pytest.importorskip("numpy", minversion="2.0")
     y = np.array(["b", "a", "c"], dtype=numpy_string_dtype)

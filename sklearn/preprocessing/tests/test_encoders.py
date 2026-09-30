@@ -2493,7 +2493,10 @@ def test_ohe_unknown_warning_mixed_infrequent_columns(handle_unknown):
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-def test_encoders_string_dtype_round_trip(numpy_string_dtype, Encoder):
+def test_encoders_string_dtype_round_trip(
+    numpy_string_dtype, Encoder, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     X = np.array([["a"], ["longer"], ["é"], ["a"]], dtype=numpy_string_dtype)
     encoder = Encoder()
     encoded = encoder.fit_transform(X)
@@ -2504,7 +2507,10 @@ def test_encoders_string_dtype_round_trip(numpy_string_dtype, Encoder):
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-def test_encoders_string_dtype_unknown(numpy_string_dtype, Encoder):
+def test_encoders_string_dtype_unknown(
+    numpy_string_dtype, Encoder, mark_string_dtype_isdtype_xfail
+):
+    mark_string_dtype_isdtype_xfail()
     X = np.array([["a"], ["b"]], dtype=numpy_string_dtype)
     X_test = np.array([["b"], ["new"]], dtype=numpy_string_dtype)
     if Encoder is OneHotEncoder:

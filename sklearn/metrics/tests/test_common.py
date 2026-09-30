@@ -1282,8 +1282,10 @@ def test_classification_invariance_string_vs_numbers_labels(name, numpy_string_d
 
 @pytest.mark.parametrize("name", CONTINUOUS_CLASSIFICATION_METRICS)
 def test_continuous_classification_invariance_string_vs_numbers_labels(
-    name, numpy_string_dtype, request
+    name, numpy_string_dtype, request, mark_string_dtype_isdtype_xfail
 ):
+    if name != "coverage_error":
+        mark_string_dtype_isdtype_xfail()
     if numpy_string_dtype.kind == "T":
         if name in {
             "log_loss",

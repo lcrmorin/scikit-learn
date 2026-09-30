@@ -527,3 +527,24 @@ def numpy_string_dtype(request):
     if request.param == "T":
         pytest.importorskip("numpy", minversion="2.0")
     return np.dtype(request.param)
+
+
+@pytest.fixture
+def mark_string_dtype_isdtype_xfail(request, numpy_string_dtype):
+    """Mark tested paths that call isdtype, which rejects strings on older NumPy."""
+
+    def mark():
+        if numpy_string_dtype.kind != "T":
+            return
+        try:
+            np.isdtype(numpy_string_dtype, "real floating")
+        except TypeError:
+            request.applymarker(
+                pytest.mark.xfail(
+                    reason="NumPy isdtype rejects StringDType (#34946)",
+                    strict=True,
+                    raises=TypeError,
+                )
+            )
+
+    return mark
