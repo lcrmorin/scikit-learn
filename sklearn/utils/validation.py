@@ -1077,7 +1077,11 @@ def check_array(
                     )
                 raise ValueError(msg)
 
-        if dtype_numeric and hasattr(array.dtype, "kind") and array.dtype.kind in "USV":
+        if (
+            dtype_numeric
+            and hasattr(array.dtype, "kind")
+            and array.dtype.kind in "USVT"
+        ):
             raise ValueError(
                 "dtype='numeric' is not compatible with arrays of bytes/strings."
                 "Convert your data to numeric values explicitly instead."

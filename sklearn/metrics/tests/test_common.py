@@ -1284,7 +1284,7 @@ def test_classification_invariance_string_vs_numbers_labels(name, numpy_string_d
 def test_continuous_classification_invariance_string_vs_numbers_labels(
     name, numpy_string_dtype, request, mark_string_dtype_isdtype_xfail
 ):
-    if name != "coverage_error":
+    if name not in {"coverage_error", "ndcg_score"}:
         mark_string_dtype_isdtype_xfail()
     if numpy_string_dtype.kind == "T":
         if name in {
@@ -1296,14 +1296,6 @@ def test_continuous_classification_invariance_string_vs_numbers_labels(
             request.applymarker(
                 pytest.mark.xfail(
                     reason="Unique cache cannot attach StringDType metadata (#34946)",
-                    strict=True,
-                    raises=TypeError,
-                )
-            )
-        elif name == "ndcg_score":
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="StringDType bypasses numeric string rejection (#34946)",
                     strict=True,
                     raises=TypeError,
                 )

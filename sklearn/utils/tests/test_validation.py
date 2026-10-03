@@ -2561,24 +2561,18 @@ def test_indexable_return_type(constructor_name):
 
 
 @pytest.mark.parametrize("values", [[["1", "2"]], [["short", "longer"]]])
-@pytest.mark.parametrize(
-    "numpy_string_dtype",
-    [
-        "U",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="StringDType bypasses numeric string rejection (#34946)",
-                strict=True,
-            ),
-        ),
-    ],
-    indirect=True,
-)
+@pytest.mark.parametrize("numpy_string_dtype", ["U", "T"], indirect=True)
 def test_check_array_string_numeric_error(numpy_string_dtype, values):
     X = np.array(values, dtype=numpy_string_dtype)
     with pytest.raises(ValueError, match="dtype='numeric'.*bytes/strings"):
         check_array(X, dtype="numeric")
+
+
+def test_check_array_string_explicit_numeric_conversion(numpy_string_dtype):
+    X = np.array([["1", "2.5"]], dtype=numpy_string_dtype)
+    checked = check_array(X, dtype=np.float64)
+    assert checked.dtype == np.float64
+    assert_array_equal(checked, [[1, 2.5]])
 
 
 def test_check_array_string_preservation(
