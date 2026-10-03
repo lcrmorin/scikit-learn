@@ -2718,14 +2718,7 @@ def test_set_score_request_with_default_scoring(metaestimator, make_dataset):
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )

@@ -1275,22 +1275,8 @@ def test_classification_invariance_string_vs_numbers_labels(name, numpy_string_d
 
 @pytest.mark.parametrize("name", CONTINUOUS_CLASSIFICATION_METRICS)
 def test_continuous_classification_invariance_string_vs_numbers_labels(
-    name, numpy_string_dtype, request
+    name, numpy_string_dtype
 ):
-    if numpy_string_dtype.kind == "T":
-        if name in {
-            "log_loss",
-            "unnormalized_log_loss",
-            "hinge_loss",
-            "d2_log_loss_score",
-        }:
-            request.applymarker(
-                pytest.mark.xfail(
-                    reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                    strict=True,
-                    raises=TypeError,
-                )
-            )
     # Ensure that continuous metrics with string labels are invariant under
     # class relabeling.
     random_state = check_random_state(0)

@@ -986,17 +986,7 @@ def test_multiclass_estimator_attribute_error():
 
 @pytest.mark.parametrize("Wrapper", [OneVsRestClassifier, OneVsOneClassifier])
 @pytest.mark.parametrize("n_classes", [2, 3])
-def test_multiclass_wrapper_string_dtype(
-    numpy_string_dtype, Wrapper, n_classes, request
-):
-    if numpy_string_dtype.kind == "T" and Wrapper is OneVsRestClassifier:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                strict=True,
-                raises=TypeError,
-            )
-        )
+def test_multiclass_wrapper_string_dtype(numpy_string_dtype, Wrapper, n_classes):
     X = np.eye(n_classes).repeat(3, axis=0)
     y = np.repeat(np.array(["a", "b", "c"][:n_classes], dtype=numpy_string_dtype), 3)
     classifier = Wrapper(LinearSVC(random_state=0)).fit(X, y)

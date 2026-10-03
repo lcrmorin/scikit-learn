@@ -946,17 +946,7 @@ def test_label_encoder_string_dtype(numpy_string_dtype):
 
 @pytest.mark.parametrize("values", [["a", "a"], ["a", "b", "a"], ["a", "c", "b"]])
 @pytest.mark.parametrize("sparse_output", [False, True])
-def test_label_binarizer_string_dtype(
-    numpy_string_dtype, values, sparse_output, request
-):
-    if numpy_string_dtype.kind == "T" and len(set(values)) > 1:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                strict=True,
-                raises=TypeError,
-            )
-        )
+def test_label_binarizer_string_dtype(numpy_string_dtype, values, sparse_output):
     y = np.array(values, dtype=numpy_string_dtype)
     encoder = LabelBinarizer(sparse_output=sparse_output)
     encoded = encoder.fit_transform(y)
@@ -967,21 +957,7 @@ def test_label_binarizer_string_dtype(
 
 @pytest.mark.parametrize(
     "numpy_string_dtype, classes_dtype",
-    [
-        pytest.param(
-            a,
-            b,
-            marks=pytest.mark.xfail(
-                reason="searchsorted cannot mix StringDType and Unicode (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        )
-        if {a, b} == {"U", "T"}
-        else (a, b)
-        for a in ["U", "O", "T"]
-        for b in ["U", "O", "T"]
-    ],
+    [(a, b) for a in ["U", "O", "T"] for b in ["U", "O", "T"]],
     indirect=["numpy_string_dtype"],
 )
 def test_label_binarize_mixed_string_dtypes(numpy_string_dtype, classes_dtype):

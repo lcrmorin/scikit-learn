@@ -775,15 +775,7 @@ def test_target_encoder_shuffle_random_state_deprecated():
 
 
 @pytest.mark.parametrize("target_type", ["continuous", "binary", "multiclass"])
-def test_target_encoder_string_dtype(numpy_string_dtype, target_type, request):
-    if numpy_string_dtype.kind == "T" and target_type == "multiclass":
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                strict=True,
-                raises=TypeError,
-            )
-        )
+def test_target_encoder_string_dtype(numpy_string_dtype, target_type):
     labels = np.array(["a", "b", "c"] * 12, dtype=numpy_string_dtype)
     X = labels.reshape(-1, 1)
     if target_type == "continuous":

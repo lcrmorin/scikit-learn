@@ -837,14 +837,7 @@ def test_early_stopping_stratified():
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )
