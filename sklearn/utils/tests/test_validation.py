@@ -2589,14 +2589,7 @@ def test_check_array_string_preservation(numpy_string_dtype):
         ("O", True),
         ("O", False),
         ("O", "allow-nan"),
-        pytest.param(
-            "T",
-            True,
-            marks=pytest.mark.xfail(
-                reason="StringDType NaN sentinel bypasses finite validation (#34946)",
-                strict=True,
-            ),
-        ),
+        ("T", True),
         ("T", False),
         ("T", "allow-nan"),
     ],
@@ -2635,3 +2628,17 @@ def test_string_dtype_sentinel_preservation(sentinel):
             assert array[3, 0] == sentinel
     result[0, 0] = "changed"
     assert X[0, 0] == ""
+
+
+@pytest.mark.parametrize("with_nan_sentinel", [False, True])
+def test_check_array_string_nan_text_is_not_missing(with_nan_sentinel):
+    pytest.importorskip("numpy", minversion="2.0")
+    dtype = (
+        np.dtypes.StringDType(na_object=np.nan)
+        if with_nan_sentinel
+        else np.dtypes.StringDType()
+    )
+    X = np.array([["nan", "inf", ""]], dtype=dtype)
+    checked = check_array(X, dtype=None, ensure_all_finite=True)
+    assert checked.dtype == dtype
+    assert_array_equal(checked, X)
