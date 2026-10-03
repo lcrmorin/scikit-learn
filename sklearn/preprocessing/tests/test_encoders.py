@@ -2501,21 +2501,7 @@ def test_encoders_string_dtype_unknown(numpy_string_dtype, Encoder):
         assert_array_equal(encoder.transform(X_test), [[1], [-1]])
 
 
-@pytest.mark.parametrize(
-    "numpy_string_dtype",
-    [
-        "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="StringDType mishandles NaN sentinel (#34946)",
-                strict=True,
-                raises=(TypeError, AssertionError),
-            ),
-        ),
-    ],
-    indirect=True,
-)
+@pytest.mark.parametrize("numpy_string_dtype", ["O", "T"], indirect=True)
 def test_ordinal_encoder_string_dtype_missing_unknown(numpy_string_dtype):
     dtype = numpy_string_dtype
     if dtype.kind == "T":

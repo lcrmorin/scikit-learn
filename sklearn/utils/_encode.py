@@ -18,10 +18,9 @@ from sklearn.utils._missing import is_scalar_nan
 
 
 def _unique(values, *, return_inverse=False, return_counts=False):
-    """Helper function to find unique values with support for python objects.
+    """Find unique values with support for objects and StringDType arrays.
 
-    Uses pure python method for object dtype, and numpy method for
-    all other dtypes.
+    Uses a Python method for object arrays and a NumPy method for other arrays.
 
     Parameters
     ----------
@@ -62,6 +61,34 @@ def _unique_np(values, return_inverse=False, return_counts=False):
     """Helper function to find unique values for numpy arrays that correctly
     accounts for nans. See `_unique` documentation for details."""
     xp, _ = get_namespace(values)
+
+    if (
+        _is_numpy_namespace(xp)
+        and values.dtype.kind == "T"
+        and is_scalar_nan(getattr(values.dtype, "na_object", None))
+    ):
+        missing = np.isnan(values)
+        if missing.any():
+            # Discover strings with NumPy, then restore a single missing category.
+            # This avoids version-dependent StringDType NaN handling in unique.
+            result = np.unique(
+                values[~missing],
+                return_inverse=return_inverse,
+                return_counts=return_counts,
+            )
+            result = list(result) if return_inverse or return_counts else [result]
+            n_strings = result[0].size
+            result[0] = np.concatenate(
+                (result[0], values[missing][:1]), dtype=values.dtype
+            )
+            if return_inverse:
+                inverse = np.empty(values.shape, dtype=np.intp)
+                inverse[~missing] = result[1]
+                inverse[missing] = n_strings
+                result[1] = inverse
+            if return_counts:
+                result[-1] = np.append(result[-1], np.count_nonzero(missing))
+            return tuple(result) if return_inverse or return_counts else result[0]
 
     inverse, counts = None, None
 
