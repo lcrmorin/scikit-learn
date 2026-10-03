@@ -599,6 +599,161 @@ def test_check_array_panadas_na_support_series():
     assert X_out.dtype == np.float32
 
 
+@pytest.fixture(params=["numpy_nullable", "pyarrow"])
+def nullable_backend(request):
+    if request.param == "pyarrow":
+        pytest.importorskip("pyarrow")
+    return request.param
+
+
+def _nullable_pandas_dtype(name, backend):
+    if backend == "pyarrow":
+        name = "bool" if name == "boolean" else name.lower()
+        return f"{name}[pyarrow]"
+    return name
+
+
+@pytest.fixture(params=["series", "dataframe"])
+def nullable_container(request):
+    def make(values, dtype):
+        pd = pytest.importorskip("pandas")
+        series = pd.Series(values, dtype=dtype)
+        return series if request.param == "series" else series.to_frame()
+
+    return make
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Float32",
+        "Float64",
+        "Int8",
+        "Int16",
+        "Int32",
+        "Int64",
+        "UInt8",
+        "UInt16",
+        "UInt32",
+        "UInt64",
+        "boolean",
+    ],
+)
+@pytest.mark.parametrize("missing", ["none", "some", "all"])
+@pytest.mark.parametrize("output_dtype", [np.float32, np.float64])
+def test_check_array_nullable_numeric_conversion(
+    name, missing, output_dtype, nullable_backend, nullable_container
+):
+    """Explicit floating conversion preserves values and the missing-value mask."""
+    values = [True, False, True] if name == "boolean" else [1, 0, 1]
+    if missing == "some":
+        values[1] = None
+    elif missing == "all":
+        values = [None] * 3
+    X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
+    result = check_array(
+        X, dtype=output_dtype, ensure_2d=False, ensure_all_finite="allow-nan"
+    )
+    expected = np.array(
+        [np.nan if value is None else value for value in values], dtype=output_dtype
+    ).reshape(X.shape)
+    assert result.dtype == output_dtype
+    assert_array_equal(result, expected)
+    if missing != "none":
+        with pytest.raises(ValueError, match="Input contains NaN"):
+            check_array(X, dtype=output_dtype, ensure_2d=False)
+
+
+@pytest.mark.parametrize("name", ["Float32", "Float64"])
+@pytest.mark.parametrize("missing", [False, True])
+@pytest.mark.parametrize("dtype", [None, "numeric", [np.float64, np.float32]])
+def test_check_array_nullable_float_preserves_dtype(
+    name, missing, dtype, nullable_backend, nullable_container, request
+):
+    """A compatible floating dtype should not be widened during validation."""
+    if name == "Float32":
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                raises=AssertionError,
+                reason="Nullable Float32 is widened to float64 during early conversion",
+            )
+        )
+    values = [1.25, None if missing else 2.5, -3.75]
+    X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
+    result = check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+    expected_dtype = np.dtype(name.lower())
+    assert result.dtype == expected_dtype
+    assert_array_equal(result.ravel(), np.array(values, dtype=expected_dtype))
+
+
+@pytest.mark.parametrize("name", ["Int64", "UInt64"])
+@pytest.mark.parametrize("dtype", [None, "numeric"])
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="Implicit float64 conversion rounds nullable 64-bit integer values",
+)
+def test_check_array_nullable_integer_exact_values(
+    name, dtype, nullable_backend, nullable_container
+):
+    """Do not use approximate or mixed float/int comparisons at the boundary."""
+    info = np.iinfo(name.lower())
+    values = [info.min, 2**53 + 1, info.max]
+    X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
+    result = check_array(X, dtype=dtype, ensure_2d=False)
+    assert [int(value) for value in result.ravel()] == values
+
+
+@pytest.mark.parametrize("name", ["Int64", "UInt64"])
+def test_check_array_nullable_integer_explicit_dtype(
+    name, nullable_backend, nullable_container
+):
+    info = np.iinfo(name.lower())
+    values = [info.min, 2**53 + 1, info.max]
+    X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
+    result = check_array(X, dtype=name.lower(), ensure_2d=False)
+    assert result.dtype == np.dtype(name.lower())
+    assert [int(value) for value in result.ravel()] == values
+    X_missing = nullable_container(
+        [1, None, 3], X.dtypes.iloc[0] if X.ndim == 2 else X.dtype
+    )
+    with pytest.raises((ValueError, TypeError)):
+        check_array(
+            X_missing,
+            dtype=name.lower(),
+            ensure_2d=False,
+            ensure_all_finite="allow-nan",
+        )
+
+
+@pytest.mark.parametrize("other_dtype", ["Float32", "Float64"])
+def test_check_array_nullable_mixed_float_columns(
+    nullable_backend, other_dtype, request
+):
+    pd = pytest.importorskip("pandas")
+    if other_dtype == "Float32":
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                raises=AssertionError,
+                reason="Mixed nullable/NumPy float32 columns are widened to float64",
+            )
+        )
+    X = pd.DataFrame(
+        {
+            "numpy": np.array([1.25, 2.5, 3.75], dtype=np.float32),
+            "nullable": pd.Series(
+                [4.5, None, 6.25],
+                dtype=_nullable_pandas_dtype(other_dtype, nullable_backend),
+            ),
+        }
+    )
+    result = check_array(X, dtype=None, ensure_all_finite="allow-nan")
+    assert result.dtype == np.result_type(np.float32, other_dtype.lower())
+    assert_array_equal(result, [[1.25, 4.5], [2.5, np.nan], [3.75, 6.25]])
+
+
 def test_check_array_pandas_dtype_casting():
     # test that data-frames with homogeneous dtype are not upcast
     pd = pytest.importorskip("pandas")
