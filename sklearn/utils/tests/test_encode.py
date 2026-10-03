@@ -257,22 +257,6 @@ def test_encode_unknown_string_dtypes(numpy_string_dtype):
         _encode_labels(values, uniques=uniques)
 
 
-@pytest.mark.parametrize(
-    "numpy_string_dtype",
-    [
-        "U",
-        "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Counts apply isnan to StringDType labels (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
-    ],
-    indirect=True,
-)
 def test_get_counts_string_dtypes(numpy_string_dtype):
     values = np.array(["b", "a", "b"], dtype=numpy_string_dtype)
     uniques = np.array(["a", "b", "c"], dtype=numpy_string_dtype)

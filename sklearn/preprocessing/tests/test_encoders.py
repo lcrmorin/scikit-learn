@@ -1400,21 +1400,7 @@ def test_ohe_infrequent_user_cats_unknown_training_errors(kwargs):
         for a, b in ["OO", "OU", "UO", "UU", "SO", "SU", "SS"]
         for container in ["list", "array", "pandas"]
     ]
-    + [
-        pytest.param(
-            a,
-            b,
-            "array",
-            marks=pytest.mark.xfail(
-                reason="Explicit categories apply isnan to StringDType labels (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        )
-        if a == "T"
-        else (a, b, "array")
-        for a, b in ["TT", "TU", "TO", "UT", ("O", "T")]
-    ],
+    + [(a, b, "array") for a, b in ["TT", "TU", "TO", "UT", ("O", "T")]],
 )
 def test_encoders_string_categories(input_dtype, category_dtype, array_type):
     """Check that encoding work with object, unicode, and byte string dtypes.

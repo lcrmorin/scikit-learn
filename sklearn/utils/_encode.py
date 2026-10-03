@@ -326,7 +326,7 @@ def _get_counts(values, uniques, nan_values=(np.nan,), counter=None):
     to be the last item in `uniques`, if it was one of the values.  For
     non-object dtypes, `uniques` is assumed to be sorted.
     """
-    if values.dtype.kind in "OU":
+    if values.dtype.kind in "OUT":
         counter = counter or Counter(values)
         output = np.zeros(len(uniques), dtype=np.int64)
         for i, item in enumerate(uniques):
