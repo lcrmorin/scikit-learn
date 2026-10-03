@@ -711,6 +711,21 @@ def _pandas_dtype_needs_early_conversion(pd_dtype):
     return False
 
 
+def _pandas_numeric_numpy_dtype(array, dtypes):
+    """Find the common NumPy dtype for dense pandas numeric columns."""
+    numpy_dtypes = [getattr(dtype, "numpy_dtype", dtype) for dtype in dtypes]
+    if not all(
+        isinstance(dtype, np.dtype) and dtype.kind in "iuf" for dtype in numpy_dtypes
+    ):
+        return None
+    dtype = np.result_type(*numpy_dtypes)
+    if dtype.kind in "iu" and np.asarray(array.isna()).any():
+        # NumPy integers cannot represent missing values. Keep the existing
+        # floating-point fallback when at least one value is missing.
+        return None
+    return dtype
+
+
 def _is_pandas_string_dtype(dtype):
     """Return True if dtype is a pandas StringDtype."""
     try:
@@ -878,6 +893,7 @@ def check_array(
     pandas_requires_conversion = False
     # track if we have a Series-like object to raise a better error message
     type_if_series = None
+    pandas_numeric_array = None
     # For dataframes, use narwhals
     if _nw_is_into_df_or_series(array):
         array_df = nw.from_native(array, allow_series=True)
@@ -915,6 +931,11 @@ def check_array(
             _pandas_dtype_needs_early_conversion(i) for i in dtypes_orig
         )
         has_pandas_string = any(_is_pandas_string_dtype(d) for d in dtypes_orig)
+        if pandas_requires_conversion:
+            numeric_dtype = _pandas_numeric_numpy_dtype(df_pandas, dtypes_orig)
+            if numeric_dtype is not None:
+                dtype_orig = numeric_dtype
+                pandas_numeric_array = df_pandas
         if all(isinstance(dtype_iter, np.dtype) for dtype_iter in dtypes_orig):
             dtype_orig = np.result_type(*dtypes_orig)
         elif has_pandas_string:
@@ -939,6 +960,11 @@ def check_array(
         else:
             # Set to None to let array.astype work out the best dtype
             dtype_orig = None
+        if pandas_requires_conversion:
+            numeric_dtype = _pandas_numeric_numpy_dtype(array, [array.dtype])
+            if numeric_dtype is not None:
+                dtype_orig = numeric_dtype
+                pandas_numeric_array = array
 
     if dtype_numeric:
         if dtype_orig is not None and (
@@ -964,7 +990,10 @@ def check_array(
         # nans
         # Use the original dtype for conversion if dtype is None
         new_dtype = dtype_orig if dtype is None else dtype
-        array = array.astype(new_dtype)
+        if pandas_numeric_array is not None and np.dtype(new_dtype).kind == "f":
+            array = pandas_numeric_array.to_numpy(dtype=new_dtype, na_value=np.nan)
+        else:
+            array = array.astype(new_dtype)
         # Since we converted here, we do not need to convert again later
         dtype = None
 
