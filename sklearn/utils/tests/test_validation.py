@@ -548,7 +548,7 @@ def test_check_array_pandas_string_dtype_numeric_error():
 @pytest.mark.parametrize(
     "dtype, expected_dtype",
     [
-        ([np.float32, np.float64], np.float32),
+        ([np.float32, np.float64], np.float64),
         (np.float64, np.float64),
         ("numeric", np.float64),
     ],
@@ -668,17 +668,9 @@ def test_check_array_nullable_numeric_conversion(
 @pytest.mark.parametrize("missing", [False, True])
 @pytest.mark.parametrize("dtype", [None, "numeric", [np.float64, np.float32]])
 def test_check_array_nullable_float_preserves_dtype(
-    name, missing, dtype, nullable_backend, nullable_container, request
+    name, missing, dtype, nullable_backend, nullable_container
 ):
     """A compatible floating dtype should not be widened during validation."""
-    if name == "Float32":
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="Nullable Float32 is widened to float64 during early conversion",
-            )
-        )
     values = [1.25, None if missing else 2.5, -3.75]
     X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
     result = check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
@@ -689,11 +681,6 @@ def test_check_array_nullable_float_preserves_dtype(
 
 @pytest.mark.parametrize("name", ["Int64", "UInt64"])
 @pytest.mark.parametrize("dtype", [None, "numeric"])
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Implicit float64 conversion rounds nullable 64-bit integer values",
-)
 def test_check_array_nullable_integer_exact_values(
     name, dtype, nullable_backend, nullable_container
 ):
@@ -703,6 +690,30 @@ def test_check_array_nullable_integer_exact_values(
     X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
     result = check_array(X, dtype=dtype, ensure_2d=False)
     assert [int(value) for value in result.ravel()] == values
+
+
+@pytest.mark.parametrize(
+    "name", ["Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64"]
+)
+@pytest.mark.parametrize("missing", [False, True])
+def test_check_array_nullable_integer_dtype(
+    name, missing, nullable_backend, nullable_container
+):
+    values = [1, None if missing else 2, 3]
+    X = nullable_container(values, _nullable_pandas_dtype(name, nullable_backend))
+    result = check_array(X, ensure_2d=False, ensure_all_finite="allow-nan")
+    expected_dtype = np.dtype("float64" if missing else name.lower())
+    assert result.dtype == expected_dtype
+    assert_array_equal(result.ravel(), np.array(values, dtype=expected_dtype))
+    if missing:
+        result = check_array(
+            X,
+            dtype=[np.float32, np.float64],
+            ensure_2d=False,
+            ensure_all_finite="allow-nan",
+        )
+        assert result.dtype == np.float32
+        assert_array_equal(result.ravel(), np.array(values, dtype=np.float32))
 
 
 @pytest.mark.parametrize("name", ["Int64", "UInt64"])
@@ -728,18 +739,8 @@ def test_check_array_nullable_integer_explicit_dtype(
 
 
 @pytest.mark.parametrize("other_dtype", ["Float32", "Float64"])
-def test_check_array_nullable_mixed_float_columns(
-    nullable_backend, other_dtype, request
-):
+def test_check_array_nullable_mixed_float_columns(nullable_backend, other_dtype):
     pd = pytest.importorskip("pandas")
-    if other_dtype == "Float32":
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="Mixed nullable/NumPy float32 columns are widened to float64",
-            )
-        )
     X = pd.DataFrame(
         {
             "numpy": np.array([1.25, 2.5, 3.75], dtype=np.float32),
@@ -2400,7 +2401,8 @@ def test_pandas_array_returns_ndarray(input_values):
         allow_nd=False,
         ensure_all_finite=False,
     )
-    assert np.issubdtype(result.dtype.kind, np.floating)
+    expected_dtype = np.float64 if pd.isna(input_values).any() else np.int32
+    assert result.dtype == expected_dtype
     assert_allclose(result, input_values)
 
 
