@@ -2721,7 +2721,7 @@ def test_set_score_request_with_default_scoring(metaestimator, make_dataset):
         pytest.param(
             "T",
             marks=pytest.mark.xfail(
-                reason="LabelBinarizer unique cache rejects StringDType (#34946)",
+                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                 strict=True,
                 raises=TypeError,
             ),

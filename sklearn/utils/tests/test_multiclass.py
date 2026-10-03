@@ -706,14 +706,7 @@ def test_string_target_type(numpy_string_dtype, values, expected):
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )

@@ -1227,14 +1227,7 @@ def test_classification_with_invalid_sample_weight(metric):
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )
@@ -1293,7 +1286,7 @@ def test_continuous_classification_invariance_string_vs_numbers_labels(
         }:
             request.applymarker(
                 pytest.mark.xfail(
-                    reason="Unique cache cannot attach StringDType metadata (#34946)",
+                    reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                     strict=True,
                     raises=TypeError,
                 )

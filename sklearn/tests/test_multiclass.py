@@ -992,7 +992,7 @@ def test_multiclass_wrapper_string_dtype(
     if numpy_string_dtype.kind == "T" and Wrapper is OneVsRestClassifier:
         request.applymarker(
             pytest.mark.xfail(
-                reason="LabelBinarizer unique cache rejects StringDType (#34946)",
+                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                 strict=True,
                 raises=TypeError,
             )

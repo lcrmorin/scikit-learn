@@ -1058,14 +1058,7 @@ def test_gnb_array_api_compliance(
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )

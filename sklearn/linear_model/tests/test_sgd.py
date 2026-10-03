@@ -2347,14 +2347,7 @@ def test_sgd_one_class_svm_formulation_with_scipy_minimize():
     [
         "U",
         "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
-                strict=True,
-                raises=TypeError,
-            ),
-        ),
+        "T",
     ],
     indirect=True,
 )

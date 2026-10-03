@@ -779,7 +779,7 @@ def test_target_encoder_string_dtype(numpy_string_dtype, target_type, request):
     if numpy_string_dtype.kind == "T" and target_type == "multiclass":
         request.applymarker(
             pytest.mark.xfail(
-                reason="LabelBinarizer unique cache rejects StringDType (#34946)",
+                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                 strict=True,
                 raises=TypeError,
             )

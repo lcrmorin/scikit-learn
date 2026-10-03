@@ -840,7 +840,7 @@ def test_early_stopping_stratified():
         pytest.param(
             "T",
             marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
+                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                 strict=True,
                 raises=TypeError,
             ),

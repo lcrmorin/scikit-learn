@@ -946,23 +946,17 @@ def test_label_encoder_string_dtype(numpy_string_dtype):
 
 @pytest.mark.parametrize("values", [["a", "a"], ["a", "b", "a"], ["a", "c", "b"]])
 @pytest.mark.parametrize("sparse_output", [False, True])
-@pytest.mark.parametrize(
-    "numpy_string_dtype",
-    [
-        "U",
-        "O",
-        pytest.param(
-            "T",
-            marks=pytest.mark.xfail(
-                reason="Unique cache cannot attach StringDType metadata (#34946)",
+def test_label_binarizer_string_dtype(
+    numpy_string_dtype, values, sparse_output, request
+):
+    if numpy_string_dtype.kind == "T" and len(set(values)) > 1:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="LabelBinarizer mixed string-dtype lookup fails (#34946)",
                 strict=True,
                 raises=TypeError,
-            ),
-        ),
-    ],
-    indirect=True,
-)
-def test_label_binarizer_string_dtype(numpy_string_dtype, values, sparse_output):
+            )
+        )
     y = np.array(values, dtype=numpy_string_dtype)
     encoder = LabelBinarizer(sparse_output=sparse_output)
     encoded = encoder.fit_transform(y)
