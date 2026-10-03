@@ -1019,8 +1019,7 @@ def test_metadata_routing_error_for_stacking_estimators(Estimator, Child):
 # =============================
 
 
-def test_stacking_string_dtype(numpy_string_dtype, mark_string_dtype_isdtype_xfail):
-    mark_string_dtype_isdtype_xfail()
+def test_stacking_string_dtype(numpy_string_dtype):
     X = np.tile(np.eye(3), (6, 1))
     y = np.tile(np.array(["z", "", "é"], dtype=numpy_string_dtype), 6)
     estimators = [

@@ -707,10 +707,7 @@ def test_shuffle_dont_convert_to_array(csc_container):
 
 
 @pytest.mark.parametrize("replace", [True, False])
-def test_resample_string_dtype(
-    numpy_string_dtype, replace, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_resample_string_dtype(numpy_string_dtype, replace):
     X = np.arange(24).reshape(12, 2)
     y = np.array(["a"] * 4 + ["b"] * 8, dtype=numpy_string_dtype)
     actual = resample(X, y, stratify=y, n_samples=6, replace=replace, random_state=0)

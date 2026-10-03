@@ -8,7 +8,12 @@ from typing import NamedTuple, cast
 
 import numpy as np
 
-from sklearn.utils._array_api import array_device, get_namespace, size
+from sklearn.utils._array_api import (
+    _is_numpy_namespace,
+    array_device,
+    get_namespace,
+    size,
+)
 from sklearn.utils._missing import is_scalar_nan
 
 
@@ -283,7 +288,9 @@ def _encode(values, *, uniques, return_diff=False):
         returned if ``return_diff=True``.
     """
     xp, _ = get_namespace(values, uniques)
-    if not xp.isdtype(values.dtype, "numeric"):
+    if (_is_numpy_namespace(xp) and values.dtype.kind == "T") or not xp.isdtype(
+        values.dtype, "numeric"
+    ):
         encoded = _map_to_integer(values, uniques)
     else:
         encoded = xp.searchsorted(uniques, values)

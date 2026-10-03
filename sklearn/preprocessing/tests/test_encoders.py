@@ -2493,10 +2493,7 @@ def test_ohe_unknown_warning_mixed_infrequent_columns(handle_unknown):
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-def test_encoders_string_dtype_round_trip(
-    numpy_string_dtype, Encoder, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_encoders_string_dtype_round_trip(numpy_string_dtype, Encoder):
     X = np.array([["a"], ["longer"], ["é"], ["a"]], dtype=numpy_string_dtype)
     encoder = Encoder()
     encoded = encoder.fit_transform(X)
@@ -2507,10 +2504,7 @@ def test_encoders_string_dtype_round_trip(
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-def test_encoders_string_dtype_unknown(
-    numpy_string_dtype, Encoder, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_encoders_string_dtype_unknown(numpy_string_dtype, Encoder):
     X = np.array([["a"], ["b"]], dtype=numpy_string_dtype)
     X_test = np.array([["b"], ["new"]], dtype=numpy_string_dtype)
     if Encoder is OneHotEncoder:
@@ -2528,9 +2522,9 @@ def test_encoders_string_dtype_unknown(
         pytest.param(
             "T",
             marks=pytest.mark.xfail(
-                reason="StringDType unique mishandles NaN sentinel (#34946)",
+                reason="StringDType mishandles NaN sentinel (#34946)",
                 strict=True,
-                raises=TypeError,
+                raises=(TypeError, AssertionError),
             ),
         ),
     ],
@@ -2550,13 +2544,9 @@ def test_ordinal_encoder_string_dtype_missing_unknown(numpy_string_dtype):
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
 @pytest.mark.parametrize("transform_dtype", ["U", "O", "T"])
-def test_encoder_mixed_string_dtype(
-    numpy_string_dtype, Encoder, transform_dtype, mark_string_dtype_isdtype_xfail
-):
+def test_encoder_mixed_string_dtype(numpy_string_dtype, Encoder, transform_dtype):
     if transform_dtype == "T":
         pytest.importorskip("numpy", minversion="2.0")
-    mark_string_dtype_isdtype_xfail()
-    mark_string_dtype_isdtype_xfail(np.dtype(transform_dtype))
     X = np.array([["z"], [""], ["é"], ["z"]], dtype=numpy_string_dtype)
     X_test = np.array([["é"], [""], ["z"]], dtype=transform_dtype)
     original, original_test = X.copy(), X_test.copy()

@@ -867,8 +867,7 @@ def test_multioutput_regressor_has_partial_fit():
         getattr(est, "partial_fit")
 
 
-def test_multioutput_string_dtype(numpy_string_dtype, mark_string_dtype_isdtype_xfail):
-    mark_string_dtype_isdtype_xfail()
+def test_multioutput_string_dtype(numpy_string_dtype):
     X = np.tile(np.eye(3), (6, 1))
     labels = np.array(["z", "", "é"], dtype=numpy_string_dtype)
     y = np.column_stack([np.tile(labels, 6), np.tile(labels[:2], 9)])

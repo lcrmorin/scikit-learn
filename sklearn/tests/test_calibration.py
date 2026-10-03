@@ -1492,10 +1492,7 @@ def test_temperature_scaling_array_api_with_str_y_estimator_not_prefit(
 
 @pytest.mark.parametrize("method", ["sigmoid", "isotonic"])
 @pytest.mark.parametrize("n_classes", [2, 3])
-def test_calibrated_classifier_string_dtype(
-    numpy_string_dtype, method, n_classes, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_calibrated_classifier_string_dtype(numpy_string_dtype, method, n_classes):
     X = np.tile(np.eye(n_classes), (9, 1))
     y = np.tile(np.array(["z", "", "é"][:n_classes], dtype=numpy_string_dtype), 9)
     classifier = CalibratedClassifierCV(LogisticRegression(), method=method, cv=3).fit(

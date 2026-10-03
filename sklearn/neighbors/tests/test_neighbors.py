@@ -2551,10 +2551,7 @@ def test_neighbors_classifier_with_string_labels(metric, Estimator):
     "Estimator", [neighbors.KNeighborsClassifier, neighbors.RadiusNeighborsClassifier]
 )
 @pytest.mark.parametrize("algorithm", ["brute", "kd_tree", "ball_tree"])
-def test_neighbors_string_dtype(
-    numpy_string_dtype, Estimator, algorithm, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_neighbors_string_dtype(numpy_string_dtype, Estimator, algorithm):
     X = np.array([[0.0], [0.1], [2.0], [2.1], [4.0], [4.1]])
     y = np.array(["z", "z", "", "", "é", "é"], dtype=numpy_string_dtype)
     params = (

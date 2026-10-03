@@ -539,10 +539,7 @@ def test_contingency_matrix_array_api_sparse():
 
 @pytest.mark.parametrize("score", score_funcs)
 @pytest.mark.parametrize("mixed_labels", [False, True])
-def test_clustering_string_dtype(
-    numpy_string_dtype, score, mixed_labels, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_clustering_string_dtype(numpy_string_dtype, score, mixed_labels):
     labels = np.array(["z", "", "é"], dtype=numpy_string_dtype)
     true = labels[[0, 0, 1, 1, 2, 2]]
     predicted = labels[[0, 1, 1, 1, 2, 0]]

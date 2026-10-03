@@ -238,10 +238,7 @@ def test_get_counts_multiple_nans():
 
 
 @pytest.mark.parametrize("encode", [_encode, _encode_labels])
-def test_encode_string_dtypes(
-    numpy_string_dtype, encode, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_encode_string_dtypes(numpy_string_dtype, encode):
     values = np.array(["b", "a", "c", "a", "c"], dtype=numpy_string_dtype)
     uniques, inverse, counts = _unique(values, return_inverse=True, return_counts=True)
     assert_array_equal(uniques, ["a", "b", "c"])
@@ -250,10 +247,7 @@ def test_encode_string_dtypes(
     assert_array_equal(encode(values, uniques=uniques), inverse)
 
 
-def test_encode_unknown_string_dtypes(
-    numpy_string_dtype, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_encode_unknown_string_dtypes(numpy_string_dtype):
     values = np.array(["b", "unknown", "a"], dtype=numpy_string_dtype)
     uniques = np.array(["a", "b"], dtype=numpy_string_dtype)
     encoded, diff = _encode(values, uniques=uniques, return_diff=True)

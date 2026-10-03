@@ -2575,10 +2575,7 @@ def test_check_array_string_explicit_numeric_conversion(numpy_string_dtype):
     assert_array_equal(checked, [[1, 2.5]])
 
 
-def test_check_array_string_preservation(
-    numpy_string_dtype, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_check_array_string_preservation(numpy_string_dtype):
     values = [["", "longer string"], ["é", "日本語"]]
     X = np.array(values, dtype=numpy_string_dtype)
     checked = check_array(X, dtype=None)
@@ -2605,11 +2602,7 @@ def test_check_array_string_preservation(
     ],
     indirect=["numpy_string_dtype"],
 )
-def test_check_array_string_missing(
-    numpy_string_dtype, ensure_all_finite, mark_string_dtype_isdtype_xfail
-):
-    if ensure_all_finite == "allow-nan":
-        mark_string_dtype_isdtype_xfail()
+def test_check_array_string_missing(numpy_string_dtype, ensure_all_finite):
     dtype = numpy_string_dtype
     if dtype.kind == "T":
         dtype = np.dtypes.StringDType(na_object=np.nan)

@@ -271,10 +271,7 @@ def test_mutual_info_n_jobs(global_random_seed, mutual_info_func, data_generator
 
 
 @pytest.mark.parametrize("discrete_features", [False, True])
-def test_mutual_info_string_dtype(
-    numpy_string_dtype, discrete_features, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_mutual_info_string_dtype(numpy_string_dtype, discrete_features):
     X = np.tile(np.eye(3), (10, 1))
     y = np.tile(np.array(["z", "", "é"], dtype=numpy_string_dtype), 10)
     result = mutual_info_classif(

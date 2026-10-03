@@ -591,14 +591,15 @@ def label_binarize(y, *, classes, neg_label=0, pos_label=1, sparse_output=False)
     n_classes = classes.shape[0]
 
     y_has_dtype = hasattr(y, "dtype")
-    if y_has_dtype and xp.isdtype(y.dtype, "signed integer"):
+    y_is_string = y_has_dtype and _is_numpy_namespace(xp) and y.dtype.kind == "T"
+    if y_has_dtype and not y_is_string and xp.isdtype(y.dtype, "signed integer"):
         int_dtype_ = y.dtype
     else:
         int_dtype_ = indexing_dtype(xp)
 
     # Align `classes` dtype with integral `y` to ensure correct comparisons
     # and avoid signed/unsigned dtype mismatches
-    if y_has_dtype and xp.isdtype(y.dtype, "integral"):
+    if y_has_dtype and not y_is_string and xp.isdtype(y.dtype, "integral"):
         classes = xp.astype(classes, y.dtype, copy=False)
 
     if y_type == "binary":

@@ -775,10 +775,7 @@ def test_target_encoder_shuffle_random_state_deprecated():
 
 
 @pytest.mark.parametrize("target_type", ["continuous", "binary", "multiclass"])
-def test_target_encoder_string_dtype(
-    numpy_string_dtype, target_type, request, mark_string_dtype_isdtype_xfail
-):
-    mark_string_dtype_isdtype_xfail()
+def test_target_encoder_string_dtype(numpy_string_dtype, target_type, request):
     if numpy_string_dtype.kind == "T" and target_type == "multiclass":
         request.applymarker(
             pytest.mark.xfail(
