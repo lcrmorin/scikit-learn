@@ -15,6 +15,7 @@ from sklearn.preprocessing import (
     LabelEncoder,
     OneHotEncoder,
     OrdinalEncoder,
+    StandardScaler,
 )
 from sklearn.utils.multiclass import type_of_target, unique_labels
 from sklearn.utils.validation import check_array, column_or_1d
@@ -190,3 +191,52 @@ def test_pandas_string_prediction_only_missing(string_dtype, Encoder):
         assert_array_equal(result.toarray(), np.zeros((2, 2)))
     else:
         assert_array_equal(result, [[-1], [-1]])
+
+
+@pytest.mark.parametrize(
+    "dtype,labels",
+    [
+        ("Int64", [0, 1]),
+        ("UInt64", [0, 1]),
+        ("boolean", [False, True]),
+        ("Int64", [2**53, 2**53 + 1]),
+        ("UInt64", [2**53, 2**53 + 1]),
+        ("int64[pyarrow]", [2**53, 2**53 + 1]),
+        ("uint64[pyarrow]", [2**53, 2**53 + 1]),
+        ("bool[pyarrow]", [False, True]),
+    ],
+)
+def test_nullable_target_pipeline(dtype, labels):
+    pd = pytest.importorskip("pandas")
+    if "pyarrow" in dtype:
+        pytest.importorskip("pyarrow")
+    X = np.tile([[0.0, 1.0], [1.0, 0.0]], (20, 1))
+    y = pd.Series(labels * 20, dtype=dtype)
+    pipeline = make_pipeline(StandardScaler(), LogisticRegression())
+    pipeline.fit(X, y)
+    # Python integer comparisons do not mask precision loss at 2**53.
+    assert [int(v) for v in pipeline[-1].classes_] == [int(v) for v in labels]
+    assert [int(v) for v in pipeline.predict(X)] == [int(v) for v in y]
+    assert pipeline.score(X, y) == 1.0
+    assert_array_equal(
+        cross_val_score(pipeline, X, y, cv=2, error_score="raise"), [1.0, 1.0]
+    )
+    y_missing = y.copy()
+    y_missing.iloc[0] = pd.NA
+    with pytest.raises(ValueError, match="NaN|NA|missing"):
+        pipeline.fit(X, y_missing)
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+@pytest.mark.xfail(
+    strict=True,
+    raises=TypeError,
+    reason="Object columns containing pd.NA still mix NAType and strings",
+)
+def test_object_string_pd_na_encoding(Encoder):
+    pd = pytest.importorskip("pandas")
+    X = pd.DataFrame({"x": ["blue", pd.NA, "red"]}, dtype=object)
+    encoder = Encoder()
+    result = encoder.inverse_transform(encoder.fit_transform(X))
+    assert_array_equal(result[[0, 2], 0], ["blue", "red"])
+    assert pd.isna(result[1, 0])

@@ -2739,3 +2739,28 @@ def test_nullable_integer_missing_precision(
         X = nullable_container([-(2**53 + 1), None, 1], pd_dtype)
         with pytest.raises(ValueError, match="would lose precision"):
             check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+
+
+@pytest.mark.parametrize(
+    "left,right", [("Int64", "Float32"), ("Int64", "UInt64"), ("Int16", "UInt8")]
+)
+def test_nullable_mixed_numeric_promotion(left, right, nullable_backend):
+    pd = pytest.importorskip("pandas")
+    values = [1, 2**53 + 1] if left == "Int64" else [1, 127]
+    X = pd.DataFrame(
+        {
+            "left": pd.Series(
+                values, dtype=_nullable_pandas_dtype(left, nullable_backend)
+            ),
+            "right": pd.Series(
+                [1, 2], dtype=_nullable_pandas_dtype(right, nullable_backend)
+            ),
+        }
+    )
+    expected_dtype = np.result_type(left.lower(), right.lower())
+    expected = np.column_stack(
+        [np.array(values, dtype=left.lower()), np.array([1, 2], dtype=right.lower())]
+    )
+    result = check_array(X, dtype=None)
+    assert result.dtype == expected_dtype
+    assert_array_equal(result, expected)
