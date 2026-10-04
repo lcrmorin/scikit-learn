@@ -66,18 +66,18 @@ def test_arrow_decimal_estimator_inference(estimator):
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize(
-    "estimator,error",
+    "estimator",
     [
-        (SVC(), AttributeError),
-        (SVR(), AttributeError),
-        (NuSVC(), AttributeError),
-        (NuSVR(), AttributeError),
-        (OneClassSVM(), AttributeError),
-        (KNeighborsClassifier(metric="precomputed"), TypeError),
-        (KNeighborsRegressor(metric="precomputed"), TypeError),
+        SVC(),
+        SVR(),
+        NuSVC(),
+        NuSVR(),
+        OneClassSVM(),
+        KNeighborsClassifier(metric="precomputed"),
+        KNeighborsRegressor(metric="precomputed"),
     ],
 )
-def test_sparse_pandas_estimator_matches_scipy(estimator, error, dtype, request):
+def test_sparse_pandas_estimator_matches_scipy(estimator, dtype):
     pd = pytest.importorskip("pandas")
     X, y = _data()
     if isinstance(estimator, (KNeighborsClassifier, KNeighborsRegressor)):
@@ -87,13 +87,6 @@ def test_sparse_pandas_estimator_matches_scipy(estimator, error, dtype, request)
     frame = pd.DataFrame(X).astype(pd.SparseDtype(dtype, 0))
     reference = clone(estimator).fit(reference_input, y)
     expected = reference.predict(reference_input)
-    request.applymarker(
-        pytest.mark.xfail(
-            strict=True,
-            raises=error,
-            reason="Sparse handling is decided before pandas-to-SciPy conversion",
-        )
-    )
     candidate = clone(estimator).fit(frame, y)
     assert_allclose(candidate.predict(frame), expected)
 

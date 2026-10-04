@@ -157,10 +157,12 @@ def _check_precomputed(X):
         case only non-zero elements may be considered neighbors.
     """
     if not issparse(X):
-        X = check_array(X, ensure_non_negative=True, input_name="X")
-        return X
-    else:
-        graph = X
+        X = check_array(
+            X, accept_sparse="csr", ensure_non_negative=True, input_name="X"
+        )
+        if not issparse(X):
+            return X
+    graph = X
 
     if graph.format not in ("csr", "csc", "coo", "lil"):
         raise TypeError(
