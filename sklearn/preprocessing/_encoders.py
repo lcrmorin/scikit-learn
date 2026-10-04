@@ -68,10 +68,20 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
 
         for i in range(n_features):
             Xi = _safe_indexing(X, indices=i, axis=1)
-            if hasattr(Xi, "iloc") and _is_pandas_string_dtype(Xi.dtype):
-                # Reuse the existing NaN category handling for pandas strings.
-                # Literal strings such as "nan" and "<NA>" remain unchanged.
-                Xi = Xi.to_numpy(dtype=object, na_value=np.nan)
+            if hasattr(Xi, "iloc"):
+                from pandas import CategoricalDtype
+
+                integer_categories_with_missing = (
+                    isinstance(Xi.dtype, CategoricalDtype)
+                    and Xi.dtype.categories.dtype.kind in "iu"
+                    and Xi.hasnans
+                )
+                if integer_categories_with_missing:
+                    # Cast the categorical array before converting to NumPy, which
+                    # otherwise uses lossy floats when values are missing.
+                    Xi = Xi.astype(object).to_numpy()
+                elif _is_pandas_string_dtype(Xi.dtype):
+                    Xi = Xi.to_numpy(dtype=object, na_value=np.nan)
             Xi = check_array(
                 Xi, ensure_2d=False, dtype=None, ensure_all_finite=needs_validation
             )

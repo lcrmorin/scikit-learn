@@ -37,16 +37,8 @@ def test_categorical_encoder_values(ordered, missing, Encoder):
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
 @pytest.mark.parametrize("missing", [False, True])
-def test_categorical_large_integer_values(Encoder, missing, request):
+def test_categorical_large_integer_values(Encoder, missing):
     pd = pytest.importorskip("pandas")
-    if missing:
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="Missing categorical data triggers lossy float64 conversion",
-            )
-        )
     values = [2**53, 2**53 + 1, None if missing else 2**53]
     X = pd.DataFrame({"x": pd.Categorical(values)})
     encoder = Encoder()
@@ -205,3 +197,15 @@ def test_arrow_temporal_selection(kind):
         ]
     X = pd.DataFrame({"x": pd.Series(values, dtype=pd.ArrowDtype(dtype))})
     pd.testing.assert_frame_equal(_safe_indexing(X, [2, 1]), X.iloc[[2, 1]])
+
+
+def test_large_integer_categorical_pipeline():
+    pd = pytest.importorskip("pandas")
+    X = pd.DataFrame({"category": pd.Categorical([2**53, 2**53 + 1, None] * 20)})
+    y = np.tile([0, 1, 2], 20)
+    pipeline = make_pipeline(OneHotEncoder(), LogisticRegression())
+    pipeline.fit(X, y)
+    transformed = pipeline[:-1].transform(X)
+    assert transformed.shape == (60, 3)
+    assert_array_equal(pipeline.predict(X), y)
+    assert pipeline.score(X, y) == 1.0
