@@ -1016,3 +1016,30 @@ def test_unsupervised_filter(selector):
     assert_allclose(X_trans, X[:, :4])
     X_trans = selector.fit_transform(X)
     assert_allclose(X_trans, X[:, :4])
+
+
+@pytest.mark.parametrize("with_y", [False, True])
+@pytest.mark.parametrize("as_frame", [False, True])
+def test_custom_score_non_numeric_features(with_y, as_frame):
+    X = np.array([["red", "small"], ["blue", "large"], ["red", "large"]], dtype=object)
+    expected = X[:, 1:]
+    if as_frame:
+        pd = pytest.importorskip("pandas")
+        X = pd.DataFrame(X)
+    y = np.array([0, 1, 0]) if with_y else None
+
+    def score_func(values, target):
+        assert_array_equal(values, X)
+        assert_array_equal(target, y)
+        return np.array([1, 2])
+
+    assert_array_equal(SelectKBest(score_func, k=1).fit_transform(X, y), expected)
+
+
+@pytest.mark.parametrize(
+    "score_func", [f_classif, f_regression, chi2, mutual_info_classif]
+)
+def test_numeric_score_rejects_non_numeric_features(score_func):
+    X = np.array([["red", "small"], ["blue", "large"], ["red", "large"]], dtype=object)
+    with pytest.raises(ValueError, match="could not convert string to float"):
+        SelectKBest(score_func, k=1).fit(X, [0, 1, 0])

@@ -552,11 +552,13 @@ class _BaseFilter(SelectorMixin, BaseEstimator):
         self : object
             Returns the instance itself.
         """
+        # Custom scoring functions may support non-numeric features. Let the
+        # scoring function enforce its own dtype requirements.
         if y is None:
-            X = validate_data(self, X, accept_sparse=["csr", "csc"])
+            X = validate_data(self, X, accept_sparse=["csr", "csc"], dtype=None)
         else:
             X, y = validate_data(
-                self, X, y, accept_sparse=["csr", "csc"], multi_output=True
+                self, X, y, accept_sparse=["csr", "csc"], multi_output=True, dtype=None
             )
 
         self._check_params(X, y)

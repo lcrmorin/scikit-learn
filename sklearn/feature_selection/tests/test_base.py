@@ -18,7 +18,7 @@ class StepSelector(SelectorMixin, BaseEstimator):
         self.step = step
 
     def fit(self, X, y=None):
-        X = validate_data(self, X, accept_sparse="csc")
+        X = validate_data(self, X, accept_sparse="csc", dtype=None)
         return self
 
     def _get_support_mask(self):
