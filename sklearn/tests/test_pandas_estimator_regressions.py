@@ -1,4 +1,4 @@
-"""Failures reproduced by the broad pandas/reference estimator audit."""
+"""Regression coverage from the broad pandas/reference estimator audit."""
 
 from decimal import Decimal
 
@@ -32,11 +32,6 @@ def _data():
         (AdditiveChi2Sampler(), "transform"),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="Numeric pandas categories reach numerical operations as object dtype",
-)
 def test_numeric_categorical_estimator_inference(ordered, estimator, method):
     pd = pytest.importorskip("pandas")
     X, y = _data()
@@ -50,11 +45,6 @@ def test_numeric_categorical_estimator_inference(ordered, estimator, method):
 
 
 @pytest.mark.parametrize("estimator", [LogisticRegression(), GaussianNB()])
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="Arrow decimal columns remain Decimal objects during inference",
-)
 def test_arrow_decimal_estimator_inference(estimator):
     pd = pytest.importorskip("pandas")
     pa = pytest.importorskip("pyarrow")

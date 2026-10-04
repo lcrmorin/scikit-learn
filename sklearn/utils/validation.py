@@ -1087,6 +1087,16 @@ def check_array(
                     array = xp.astype(array, dtype, copy=False)
                 else:
                     array = _asarray_with_order(array, order=order, dtype=dtype, xp=xp)
+                    if (
+                        dtype_numeric
+                        and not is_array_api_compliant
+                        and array.dtype.kind == "O"
+                    ):
+                        # Some extension arrays reveal their object dtype only
+                        # after conversion (e.g. pandas categories or decimals).
+                        array = _asarray_with_order(
+                            array, order=order, dtype=xp.float64, xp=xp
+                        )
             except ComplexWarning as complex_warning:
                 raise ValueError(
                     "Complex data not supported\n{}\n".format(array)
