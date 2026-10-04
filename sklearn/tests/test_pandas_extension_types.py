@@ -130,7 +130,9 @@ def test_non_numeric_extensions_reject_float_conversion(kind):
 
 
 @pytest.mark.parametrize("missing", [False, True])
-def test_arrow_decimal_explicit_float_conversion(missing):
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, "numeric"])
+@pytest.mark.parametrize("as_series", [False, True])
+def test_arrow_decimal_explicit_float_conversion(missing, dtype, as_series):
     pd = pytest.importorskip("pandas")
     pa = pytest.importorskip("pyarrow")
     X = pd.DataFrame(
@@ -145,8 +147,10 @@ def test_arrow_decimal_explicit_float_conversion(missing):
             )
         }
     )
-    result = check_array(X, dtype=np.float64, ensure_all_finite="allow-nan")
-    assert result.dtype == np.float64
+    if as_series:
+        X = X["x"]
+    result = check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+    assert result.dtype == (np.float64 if dtype == "numeric" else dtype)
     assert_allclose(result.ravel(), [1.25, np.nan if missing else 2.5, 3.75])
 
 

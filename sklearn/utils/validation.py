@@ -1097,6 +1097,13 @@ def check_array(
                         )
                     array = xp.astype(array, dtype, copy=False)
                 else:
+                    if (
+                        dtype is not None
+                        and not is_array_api_compliant
+                        and np.dtype(dtype).kind == "f"
+                        and is_pandas_df_or_series(array)
+                    ):
+                        array = array.to_numpy(dtype=dtype, na_value=np.nan)
                     array = _asarray_with_order(array, order=order, dtype=dtype, xp=xp)
                     if (
                         dtype_numeric
@@ -1105,6 +1112,10 @@ def check_array(
                     ):
                         # Some extension arrays reveal their object dtype only
                         # after conversion (e.g. pandas categories or decimals).
+                        if is_pandas_df_or_series(array_orig):
+                            array = array_orig.to_numpy(
+                                dtype=np.float64, na_value=np.nan
+                            )
                         array = _asarray_with_order(
                             array, order=order, dtype=xp.float64, xp=xp
                         )
