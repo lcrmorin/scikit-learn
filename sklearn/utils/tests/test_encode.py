@@ -238,13 +238,19 @@ def test_get_counts_multiple_nans():
 
 
 @pytest.mark.parametrize("encode", [_encode, _encode_labels])
-def test_encode_string_dtypes(numpy_string_dtype, encode):
-    values = np.array(["b", "a", "c", "a", "c"], dtype=numpy_string_dtype)
+@pytest.mark.parametrize("prefix", ["", "long_category_name_"])
+def test_encode_string_dtypes(numpy_string_dtype, encode, prefix):
+    values = np.array(
+        [prefix + label for label in ["b", "a", "c", "a", "c"]],
+        dtype=numpy_string_dtype,
+    )
     uniques, inverse, counts = _unique(values, return_inverse=True, return_counts=True)
-    assert_array_equal(uniques, ["a", "b", "c"])
+    assert_array_equal(uniques, [prefix + label for label in ["a", "b", "c"]])
     assert_array_equal(inverse, [1, 0, 2, 0, 2])
     assert_array_equal(counts, [2, 1, 2])
     assert_array_equal(encode(values, uniques=uniques), inverse)
+    # String categories can have an explicitly supplied, non-sorted order.
+    assert_array_equal(encode(values, uniques=uniques[::-1]), 2 - inverse)
 
 
 def test_encode_unknown_string_dtypes(numpy_string_dtype):
