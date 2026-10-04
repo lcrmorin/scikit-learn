@@ -729,7 +729,7 @@ def test_check_array_nullable_integer_explicit_dtype(
     X_missing = nullable_container(
         [1, None, 3], X.dtypes.iloc[0] if X.ndim == 2 else X.dtype
     )
-    with pytest.raises((ValueError, TypeError)):
+    with pytest.raises(ValueError, match="Cannot convert missing values"):
         check_array(
             X_missing,
             dtype=name.lower(),
