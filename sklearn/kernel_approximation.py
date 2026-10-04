@@ -709,7 +709,12 @@ class AdditiveChi2Sampler(TransformerMixin, BaseEstimator):
             the type of the input X.
         """
         X = validate_data(
-            self, X, accept_sparse="csr", reset=False, ensure_non_negative=True
+            self,
+            X,
+            accept_sparse="csr",
+            dtype=[np.float64, np.float32],
+            reset=False,
+            ensure_non_negative=True,
         )
         sparse = sp.issparse(X)
 

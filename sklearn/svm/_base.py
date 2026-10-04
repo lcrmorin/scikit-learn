@@ -200,11 +200,6 @@ class BaseLibSVM(BaseEstimator, metaclass=ABCMeta):
         """
         rnd = check_random_state(self.random_state)
 
-        sparse = sp.issparse(X)
-        if sparse and self.kernel == "precomputed":
-            raise TypeError("Sparse precomputed kernels are not supported.")
-        self._sparse = sparse and not callable(self.kernel)
-
         if callable(self.kernel):
             check_consistent_length(X, y)
         else:
@@ -217,6 +212,11 @@ class BaseLibSVM(BaseEstimator, metaclass=ABCMeta):
                 accept_sparse="csr",
                 accept_large_sparse=False,
             )
+
+        sparse = sp.issparse(X)
+        if sparse and self.kernel == "precomputed":
+            raise TypeError("Sparse precomputed kernels are not supported.")
+        self._sparse = sparse and not callable(self.kernel)
 
         y = self._validate_targets(y)
 

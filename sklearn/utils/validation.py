@@ -926,7 +926,7 @@ def check_array(
     ):
         # Throw warning if some columns are sparse. If all columns are sparse, then
         # array.sparse exists and sparsity will be preserved (later).
-        from pandas import SparseDtype
+        from pandas import SparseDtype, isna
 
         def is_pd_sparse(dtype):
             return isinstance(dtype, SparseDtype)
@@ -937,6 +937,11 @@ def check_array(
             # All columns of the pandas.DataFrame are sparse. Note that the `sparse`
             # attribute is not a guaranteed detection for all sparse columns.
             is_pandas_fully_sparse_df = True
+            if any(isna(d.fill_value) or d.fill_value != 0 for d in df_pandas.dtypes):
+                raise ValueError(
+                    "Sparse pandas fill value must be 0 to convert to a SciPy "
+                    "sparse matrix without changing values."
+                )
         elif df_pandas.dtypes.apply(is_pd_sparse).any():
             warnings.warn(
                 "pandas.DataFrame with sparse columns found."
@@ -957,6 +962,8 @@ def check_array(
                 pandas_numeric_array = df_pandas
         if all(isinstance(dtype_iter, np.dtype) for dtype_iter in dtypes_orig):
             dtype_orig = np.result_type(*dtypes_orig)
+        elif is_pandas_fully_sparse_df:
+            dtype_orig = np.result_type(*(d.subtype for d in dtypes_orig))
         elif has_pandas_string:
             # Force object if any of the dtypes is a StringDtype.
             dtype_orig = object
@@ -1080,6 +1087,16 @@ def check_array(
                     array = xp.astype(array, dtype, copy=False)
                 else:
                     array = _asarray_with_order(array, order=order, dtype=dtype, xp=xp)
+                    if (
+                        dtype_numeric
+                        and not is_array_api_compliant
+                        and array.dtype.kind == "O"
+                    ):
+                        # Some extension arrays reveal their object dtype only
+                        # after conversion (e.g. pandas categories or decimals).
+                        array = _asarray_with_order(
+                            array, order=order, dtype=xp.float64, xp=xp
+                        )
             except ComplexWarning as complex_warning:
                 raise ValueError(
                     "Complex data not supported\n{}\n".format(array)

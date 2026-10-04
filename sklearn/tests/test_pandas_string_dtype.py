@@ -228,11 +228,6 @@ def test_nullable_target_pipeline(dtype, labels):
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="Object columns containing pd.NA still mix NAType and strings",
-)
 def test_object_string_pd_na_encoding(Encoder):
     pd = pytest.importorskip("pandas")
     X = pd.DataFrame({"x": ["blue", pd.NA, "red"]}, dtype=object)
@@ -240,3 +235,63 @@ def test_object_string_pd_na_encoding(Encoder):
     result = encoder.inverse_transform(encoder.fit_transform(X))
     assert_array_equal(result[[0, 2], 0], ["blue", "red"])
     assert pd.isna(result[1, 0])
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+@pytest.mark.parametrize("case", ["strings", "numbers", "all_missing"])
+def test_object_pd_na_preserves_other_values(Encoder, case):
+    pd = pytest.importorskip("pandas")
+    values = {
+        "strings": ["blue", None, pd.NA, np.nan, "nan", "<NA>", ""],
+        "numbers": [1, 2, pd.NA, None, np.nan],
+        "all_missing": [pd.NA, pd.NA],
+    }[case]
+    X = pd.DataFrame({"x": values}, dtype=object)
+    original = X.copy(deep=True)
+    encoder = Encoder()
+    encoded = encoder.fit_transform(X)
+    restored = encoder.inverse_transform(encoded).ravel()
+    for actual, expected in zip(restored, values):
+        if expected is pd.NA or isinstance(expected, float) and np.isnan(expected):
+            assert isinstance(actual, float) and np.isnan(actual)
+        elif expected is None:
+            assert actual is None
+        else:
+            assert actual == expected
+    pd.testing.assert_frame_equal(X, original)
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+def test_object_pd_na_unknown_and_mixed_categories(Encoder):
+    pd = pytest.importorskip("pandas")
+    train = pd.DataFrame({"x": ["blue", "red"]}, dtype=object)
+    probe = pd.DataFrame({"x": [pd.NA]}, dtype=object)
+    with pytest.raises(ValueError, match="unknown categories"):
+        Encoder().fit(train).transform(probe)
+    kwargs = (
+        {"handle_unknown": "ignore"}
+        if Encoder is OneHotEncoder
+        else {"handle_unknown": "use_encoded_value", "unknown_value": -1}
+    )
+    result = Encoder(**kwargs).fit(train).transform(probe)
+    if Encoder is OneHotEncoder:
+        assert_array_equal(result.toarray(), [[0, 0]])
+    else:
+        assert_array_equal(result, [[-1]])
+    with pytest.raises(TypeError, match="uniformly strings or numbers"):
+        Encoder().fit(pd.DataFrame({"x": ["blue", 1, pd.NA]}, dtype=object))
+
+
+def test_object_pd_na_classifier_pipeline():
+    pd = pytest.importorskip("pandas")
+    X = pd.DataFrame({"x": ["blue", None, pd.NA] * 20}, dtype=object)
+    original = X.copy(deep=True)
+    y = np.tile([0, 1, 2], 20)
+    pipeline = make_pipeline(OneHotEncoder(), LogisticRegression())
+    pipeline.fit(X, y)
+    assert pipeline[:-1].transform(X).shape == (60, 3)
+    assert_array_equal(pipeline.predict(X), y)
+    assert_array_equal(
+        cross_val_score(pipeline, X, y, cv=3, error_score="raise"), np.ones(3)
+    )
+    pd.testing.assert_frame_equal(X, original)

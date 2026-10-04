@@ -2069,7 +2069,8 @@ def test_check_sparse_pandas_sp_format(convert_to_narwhals, sp_format):
     pd = pytest.importorskip("pandas")
     sp_mat = _sparse_random_matrix(10, 3)
 
-    sdf = pd.DataFrame.sparse.from_spmatrix(sp_mat)
+    # Explicit zero fill avoids pandas-version-dependent defaults in from_spmatrix.
+    sdf = pd.DataFrame(sp_mat.toarray()).astype(pd.SparseDtype(sp_mat.dtype, 0))
     if convert_to_narwhals:
         sdf = nw.from_native(sdf)
     result = check_array(sdf, accept_sparse=sp_format)
