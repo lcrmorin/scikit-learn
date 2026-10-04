@@ -262,3 +262,41 @@ def test_operation_metadata_fallback_is_not_specific_to_stringdtype(monkeypatch)
         monkeypatch.setattr(np, "dtype", unsupported_metadata)
         assert _attach_metadata(arr, source="test") is arr
         assert _get_metadata(arr) == {"source": "test"}
+
+
+@pytest.mark.parametrize("dtype", ["int64", "U", "O", "T"])
+@pytest.mark.parametrize("operation", ["targets", "fit", "fit_transform", "transform"])
+def test_label_validation_reuses_unique(dtype, operation, monkeypatch):
+    from sklearn.preprocessing import LabelBinarizer
+    from sklearn.utils.multiclass import check_classification_targets
+
+    if dtype == "T":
+        pytest.importorskip("numpy", minversion="2.0")
+        dtype = np.dtypes.StringDType()
+    y = np.array(["0", "1", "2"] * 10, dtype=dtype)
+    estimator = LabelBinarizer()
+    if operation == "transform":
+        estimator.fit(y)
+    original_unique = np.unique
+    calls = []
+
+    def counted_unique(values, *args, **kwargs):
+        # Ignore discovery on the much smaller array of merged classes.
+        if np.asarray(values).size == y.size:
+            calls.append(1)
+        return original_unique(values, *args, **kwargs)
+
+    monkeypatch.setattr(np, "unique", counted_unique)
+    function = (
+        check_classification_targets
+        if operation == "targets"
+        else getattr(estimator, operation)
+    )
+    function(y)
+    assert len(calls) == 1
+    # A separate public call must recompute, even when given the same array.
+    y[0] = "1"
+    result = function(y)
+    assert len(calls) == 2
+    if operation in ("fit_transform", "transform"):
+        assert_array_equal(result[0], [0, 1, 0])

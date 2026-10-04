@@ -217,31 +217,32 @@ def check_classification_targets(y):
     y : array-like
         Target values.
     """
-    y_type = type_of_target(y, input_name="y")
-    if y_type not in [
-        "binary",
-        "multiclass",
-        "multiclass-multioutput",
-        "multilabel-indicator",
-        "multilabel-sequences",
-    ]:
-        raise ValueError(
-            f"Unknown label type: {y_type}. Maybe you are trying to fit a "
-            "classifier, which expects discrete classes on a "
-            "regression target with continuous values."
-        )
-
-    if "multiclass" in y_type:
-        n_samples = _num_samples(y)
-        if n_samples > 20 and cached_unique(y).shape[0] > round(0.5 * n_samples):
-            # Only raise the warning when we have at least 20 samples.
-            warnings.warn(
-                "The number of unique classes is greater than 50% of the number "
-                "of samples. `y` could represent a regression problem, not a "
-                "classification problem.",
-                UserWarning,
-                stacklevel=2,
+    with _metadata_cache():
+        y_type = type_of_target(y, input_name="y")
+        if y_type not in [
+            "binary",
+            "multiclass",
+            "multiclass-multioutput",
+            "multilabel-indicator",
+            "multilabel-sequences",
+        ]:
+            raise ValueError(
+                f"Unknown label type: {y_type}. Maybe you are trying to fit a "
+                "classifier, which expects discrete classes on a "
+                "regression target with continuous values."
             )
+
+        if "multiclass" in y_type:
+            n_samples = _num_samples(y)
+            if n_samples > 20 and cached_unique(y).shape[0] > round(0.5 * n_samples):
+                # Only raise the warning when we have at least 20 samples.
+                warnings.warn(
+                    "The number of unique classes is greater than 50% of the number "
+                    "of samples. `y` could represent a regression problem, not a "
+                    "classification problem.",
+                    UserWarning,
+                    stacklevel=2,
+                )
 
 
 @_metadata_cache()
