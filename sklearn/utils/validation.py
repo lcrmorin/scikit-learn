@@ -1013,6 +1013,17 @@ def check_array(
             # list of accepted types.
             dtype = dtype[0]
 
+    if (
+        dtype is not None
+        and not is_array_api_compliant
+        and np.dtype(dtype).kind in "iu"
+        and is_pandas_df_or_series(array)
+        and np.asarray(array.isna()).any()
+    ):
+        # Older pandas/Arrow versions can silently replace missing values with
+        # integers when casting. NumPy integer dtypes cannot represent them.
+        raise ValueError("Cannot convert missing values to a NumPy integer dtype.")
+
     if pandas_requires_conversion:
         # pandas dataframe requires conversion earlier to handle extension dtypes with
         # nans
@@ -1086,6 +1097,13 @@ def check_array(
                         )
                     array = xp.astype(array, dtype, copy=False)
                 else:
+                    if (
+                        dtype is not None
+                        and not is_array_api_compliant
+                        and np.dtype(dtype).kind == "f"
+                        and is_pandas_df_or_series(array)
+                    ):
+                        array = array.to_numpy(dtype=dtype, na_value=np.nan)
                     array = _asarray_with_order(array, order=order, dtype=dtype, xp=xp)
                     if (
                         dtype_numeric
@@ -1094,6 +1112,10 @@ def check_array(
                     ):
                         # Some extension arrays reveal their object dtype only
                         # after conversion (e.g. pandas categories or decimals).
+                        if is_pandas_df_or_series(array_orig):
+                            array = array_orig.to_numpy(
+                                dtype=np.float64, na_value=np.nan
+                            )
                         array = _asarray_with_order(
                             array, order=order, dtype=xp.float64, xp=xp
                         )
