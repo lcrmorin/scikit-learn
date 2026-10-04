@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import numbers
+import sys
 import warnings
 from collections import Counter
 from functools import partial
@@ -929,7 +930,9 @@ class MissingIndicator(TransformerMixin, BaseEstimator):
         return imputer_mask, features_indices
 
     def _validate_input(self, X, in_fit):
-        if not is_scalar_nan(self.missing_values):
+        if not (
+            is_scalar_nan(self.missing_values) or is_pandas_na(self.missing_values)
+        ):
             ensure_all_finite = True
         else:
             ensure_all_finite = "allow-nan"
@@ -941,6 +944,20 @@ class MissingIndicator(TransformerMixin, BaseEstimator):
             dtype=None,
             ensure_all_finite=ensure_all_finite,
         )
+        pandas = sys.modules.get("pandas")
+        if (
+            pandas is not None
+            and X.dtype.kind == "O"
+            and is_scalar_nan(self.missing_values)
+        ):
+            # Object-backed pandas columns can retain pd.NA after validation.
+            # Normalize only this sentinel, preserving None and literal strings.
+            pandas_na_mask = np.fromiter(
+                (value is pandas.NA for value in X.flat), dtype=bool, count=X.size
+            ).reshape(X.shape)
+            if pandas_na_mask.any():
+                X = X.copy()
+                X[pandas_na_mask] = np.nan
         _check_inputs_dtype(X, self.missing_values)
         if X.dtype.kind not in ("i", "u", "f", "O"):
             raise ValueError(

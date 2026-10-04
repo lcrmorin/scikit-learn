@@ -116,15 +116,16 @@ def test_numpy_boolean_estimator_matches_float(estimator, method):
 
 
 @pytest.mark.parametrize("dtype", [object, "string[python]", "string[pyarrow]"])
-@pytest.mark.xfail(
-    strict=True,
-    raises=TypeError,
-    reason="MissingIndicator finite validation cannot compare pd.NA",
-)
-def test_missing_indicator_explicit_pd_na(dtype):
+@pytest.mark.parametrize("missing_values", ["pd.NA", "np.nan"])
+def test_missing_indicator_pd_na(dtype, missing_values):
     pd = pytest.importorskip("pandas")
     if dtype == "string[pyarrow]":
         pytest.importorskip("pyarrow")
-    X = pd.DataFrame({"x": ["blue", pd.NA, "red"]}, dtype=dtype)
-    actual = MissingIndicator(missing_values=pd.NA).fit_transform(X)
-    assert_allclose(actual, [[False], [True], [False]])
+    X = pd.DataFrame({"x": ["blue", pd.NA, "red", "nan"]}, dtype=dtype)
+    original = X.copy(deep=True)
+    sentinel = pd.NA if missing_values == "pd.NA" else np.nan
+    indicator = MissingIndicator(missing_values=sentinel)
+    actual = indicator.fit_transform(X)
+    assert_allclose(indicator.transform(X), actual)
+    pd.testing.assert_frame_equal(X, original)
+    assert_allclose(actual, [[False], [True], [False], [False]])
