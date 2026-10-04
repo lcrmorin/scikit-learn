@@ -11,6 +11,17 @@ from sklearn.utils._array_api import get_namespace
 _METADATA_CACHE = ContextVar("sklearn_array_metadata", default=None)
 
 
+class _MetadataCache(dict):
+    def __init__(self):
+        super().__init__()
+        self.active = True
+
+
+def _active_metadata_cache():
+    cache = _METADATA_CACHE.get()
+    return cache if cache is not None and cache.active else None
+
+
 @contextmanager
 def _metadata_cache():
     """Share metadata during a read-only operation, including nested calls.
@@ -19,25 +30,30 @@ def _metadata_cache():
     scope releases all entries on exit, including when validation raises. Inputs
     must not be mutated inside the scope. Nothing is cached between operations.
     """
-    if _METADATA_CACHE.get() is not None:
+    if _active_metadata_cache() is not None:
         yield
         return
-    token = _METADATA_CACHE.set({})
+    cache = _MetadataCache()
+    token = _METADATA_CACHE.set(cache)
     try:
         yield
     finally:
+        # Copied contexts may outlive the operation. Release retained arrays and
+        # prevent those contexts from treating this closed scope as active.
+        cache.active = False
+        cache.clear()
         _METADATA_CACHE.reset(token)
 
 
 def _remember_metadata(y, metadata):
-    cache = _METADATA_CACHE.get()
+    cache = _active_metadata_cache()
     if cache is not None:
         cache[id(y)] = (y, metadata)
 
 
 def _get_metadata(y):
     """Read operation-local metadata, falling back to NumPy dtype metadata."""
-    cache = _METADATA_CACHE.get()
+    cache = _active_metadata_cache()
     if cache is not None and id(y) in cache:
         return cache[id(y)][1]
     if isinstance(y, np.ndarray) and y.dtype.kind != "T":

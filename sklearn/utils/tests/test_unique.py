@@ -300,3 +300,32 @@ def test_label_validation_reuses_unique(dtype, operation, monkeypatch):
     assert len(calls) == 2
     if operation in ("fit_transform", "transform"):
         assert_array_equal(result[0], [0, 1, 0])
+
+
+@pytest.mark.parametrize("use_scope", [False, True])
+def test_operation_metadata_expires_in_copied_context(use_scope):
+    import gc
+    import weakref
+    from contextlib import nullcontext
+    from contextvars import copy_context
+
+    from sklearn.utils._unique import _metadata_cache
+
+    with _metadata_cache():
+        original = np.array([1, 2, 1])
+        reference = weakref.ref(original)
+        cached_unique(original)
+        copied = copy_context()
+    del original
+    gc.collect()
+    assert reference() is None
+
+    values = np.array([1, 2, 1])
+
+    def read():
+        with _metadata_cache() if use_scope else nullcontext():
+            return cached_unique(values)
+
+    assert_array_equal(copied.run(read), [1, 2])
+    values[0] = 3
+    assert_array_equal(copied.run(read), [1, 2, 3])
