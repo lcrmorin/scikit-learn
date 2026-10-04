@@ -711,7 +711,7 @@ def _pandas_dtype_needs_early_conversion(pd_dtype):
     return False
 
 
-def _pandas_numeric_numpy_dtype(array, dtypes):
+def _pandas_numeric_numpy_dtype(array, dtypes, *, check_precision=False):
     """Find the common NumPy dtype for dense pandas numeric columns."""
     numpy_dtypes = [getattr(dtype, "numpy_dtype", dtype) for dtype in dtypes]
     if not all(
@@ -720,8 +720,25 @@ def _pandas_numeric_numpy_dtype(array, dtypes):
         return None
     dtype = np.result_type(*numpy_dtypes)
     if dtype.kind in "iu" and np.asarray(array.isna()).any():
-        # NumPy integers cannot represent missing values. Keep the existing
-        # floating-point fallback when at least one value is missing.
+        # NumPy integers cannot represent missing values. Do not silently
+        # round large integers when falling back to float64.
+        if check_precision:
+            columns = (
+                (array.iloc[:, i] for i in range(array.shape[1]))
+                if array.ndim == 2
+                else [array]
+            )
+            for column, numpy_dtype in zip(columns, numpy_dtypes):
+                values = column.dropna().to_numpy(dtype=numpy_dtype)
+                large = values > 2**53
+                if numpy_dtype.kind == "i":
+                    large |= values < -(2**53)
+                if any(int(float(value)) != int(value) for value in values[large]):
+                    raise ValueError(
+                        "Converting nullable integers with missing values to float64 "
+                        "would lose precision. Handle missing values before conversion "
+                        "or explicitly request a floating-point dtype."
+                    )
         return None
     return dtype
 
@@ -932,7 +949,9 @@ def check_array(
         )
         has_pandas_string = any(_is_pandas_string_dtype(d) for d in dtypes_orig)
         if pandas_requires_conversion:
-            numeric_dtype = _pandas_numeric_numpy_dtype(df_pandas, dtypes_orig)
+            numeric_dtype = _pandas_numeric_numpy_dtype(
+                df_pandas, dtypes_orig, check_precision=dtype is None or dtype_numeric
+            )
             if numeric_dtype is not None:
                 dtype_orig = numeric_dtype
                 pandas_numeric_array = df_pandas
@@ -961,7 +980,9 @@ def check_array(
             # Set to None to let array.astype work out the best dtype
             dtype_orig = None
         if pandas_requires_conversion:
-            numeric_dtype = _pandas_numeric_numpy_dtype(array, [array.dtype])
+            numeric_dtype = _pandas_numeric_numpy_dtype(
+                array, [array.dtype], check_precision=dtype is None or dtype_numeric
+            )
             if numeric_dtype is not None:
                 dtype_orig = numeric_dtype
                 pandas_numeric_array = array
