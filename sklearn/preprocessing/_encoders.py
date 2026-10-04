@@ -69,7 +69,7 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
         for i in range(n_features):
             Xi = _safe_indexing(X, indices=i, axis=1)
             if hasattr(Xi, "iloc"):
-                from pandas import CategoricalDtype
+                from pandas import NA, CategoricalDtype
 
                 integer_categories_with_missing = (
                     isinstance(Xi.dtype, CategoricalDtype)
@@ -82,6 +82,15 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
                     Xi = Xi.astype(object).to_numpy()
                 elif _is_pandas_string_dtype(Xi.dtype):
                     Xi = Xi.to_numpy(dtype=object, na_value=np.nan)
+                elif Xi.dtype == object:
+                    values = Xi.to_numpy(copy=False)
+                    missing = np.fromiter(
+                        (value is NA for value in values), dtype=bool, count=len(values)
+                    )
+                    if missing.any():
+                        # Preserve None as a distinct category and never mutate X.
+                        Xi = values.copy()
+                        Xi[missing] = np.nan
             Xi = check_array(
                 Xi, ensure_2d=False, dtype=None, ensure_all_finite=needs_validation
             )
