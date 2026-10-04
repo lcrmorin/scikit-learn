@@ -2715,3 +2715,27 @@ def test_indexable_return_type(constructor_name):
         expected_type = type(X)
     X = indexable(X)[0]
     assert isinstance(X, expected_type)
+
+
+@pytest.mark.parametrize("name", ["Int64", "UInt64"])
+@pytest.mark.parametrize("dtype", [None, "numeric"])
+def test_nullable_integer_missing_precision(
+    name, dtype, nullable_backend, nullable_container
+):
+    pd_dtype = _nullable_pandas_dtype(name, nullable_backend)
+    limit = np.iinfo(name.lower()).max
+    for value in [2**53 + 1, limit]:
+        X = nullable_container([value, None, 1], pd_dtype)
+        with pytest.raises(ValueError, match="would lose precision"):
+            check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+        result = check_array(
+            X, dtype=np.float64, ensure_2d=False, ensure_all_finite="allow-nan"
+        )
+        assert_array_equal(result.ravel(), [float(value), np.nan, 1])
+    X = nullable_container([2**54, None, 1], pd_dtype)
+    result = check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+    assert_array_equal(result.ravel(), [float(2**54), np.nan, 1])
+    if name == "Int64":
+        X = nullable_container([-(2**53 + 1), None, 1], pd_dtype)
+        with pytest.raises(ValueError, match="would lose precision"):
+            check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
