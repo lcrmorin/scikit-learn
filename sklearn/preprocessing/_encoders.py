@@ -23,6 +23,7 @@ from sklearn.utils._set_output import _get_output_config
 from sklearn.utils.fixes import _ensure_sparse_index_int32
 from sklearn.utils.validation import (
     _check_feature_names_in,
+    _is_pandas_string_dtype,
     check_is_fitted,
     validate_data,
 )
@@ -67,6 +68,10 @@ class _BaseEncoder(TransformerMixin, BaseEstimator):
 
         for i in range(n_features):
             Xi = _safe_indexing(X, indices=i, axis=1)
+            if hasattr(Xi, "iloc") and _is_pandas_string_dtype(Xi.dtype):
+                # Reuse the existing NaN category handling for pandas strings.
+                # Literal strings such as "nan" and "<NA>" remain unchanged.
+                Xi = Xi.to_numpy(dtype=object, na_value=np.nan)
             Xi = check_array(
                 Xi, ensure_2d=False, dtype=None, ensure_all_finite=needs_validation
             )

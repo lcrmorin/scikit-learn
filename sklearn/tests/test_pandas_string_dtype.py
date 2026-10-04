@@ -87,16 +87,8 @@ def test_pandas_string_target_roundtrip(string_dtype, Encoder):
 
 
 @pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
-def test_pandas_string_encoder_missing(string_dtype, Encoder, request):
+def test_pandas_string_encoder_missing(string_dtype, Encoder):
     pd = pytest.importorskip("pandas")
-    if string_dtype.na_value is pd.NA:
-        request.applymarker(
-            pytest.mark.xfail(
-                raises=TypeError,
-                strict=True,
-                reason="Encoders treat pd.NA as a mixed NAType/str category",
-            )
-        )
     X = pd.DataFrame({"colour": ["blue", None, "red"]}, dtype=string_dtype)
     encoder = Encoder()
     encoded = encoder.fit_transform(X)
@@ -156,3 +148,45 @@ def test_pandas_nan_string_ordinal_missing_and_unknown(string_storage):
     ).fit(X)
     probe = pd.DataFrame({"colour": ["red", None, "green"]}, dtype=dtype)
     assert_array_equal(encoder.transform(probe)[:, 0], [1, -2, -1])
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+@pytest.mark.parametrize("values", [[None, None], ["nan", "<NA>", "", None]])
+def test_pandas_string_missing_matches_nan(string_dtype, Encoder, values):
+    pd = pytest.importorskip("pandas")
+    X = pd.DataFrame({"x": values}, dtype=string_dtype)
+    original = X.copy(deep=True)
+    reference = X.to_numpy(dtype=object, na_value=np.nan)
+    encoder = Encoder()
+    expected_encoder = Encoder()
+    actual = encoder.fit_transform(X)
+    expected = expected_encoder.fit_transform(reference)
+    if hasattr(actual, "toarray"):
+        actual, expected = actual.toarray(), expected.toarray()
+    assert_allclose(actual, expected)
+    restored = encoder.inverse_transform(actual)
+    expected_restored = expected_encoder.inverse_transform(expected)
+    pd.testing.assert_frame_equal(
+        pd.DataFrame(restored), pd.DataFrame(expected_restored)
+    )
+    pd.testing.assert_frame_equal(X, original)
+
+
+@pytest.mark.parametrize("Encoder", [OneHotEncoder, OrdinalEncoder])
+def test_pandas_string_prediction_only_missing(string_dtype, Encoder):
+    pd = pytest.importorskip("pandas")
+    train = pd.DataFrame({"x": ["blue", "red"]}, dtype=string_dtype)
+    probe = pd.DataFrame({"x": [None, "green"]}, dtype=string_dtype)
+    with pytest.raises(ValueError, match="unknown categories"):
+        Encoder().fit(train).transform(probe)
+    kwargs = (
+        {"handle_unknown": "ignore"}
+        if Encoder is OneHotEncoder
+        else {"handle_unknown": "use_encoded_value", "unknown_value": -1}
+    )
+    encoder = Encoder(**kwargs).fit(train)
+    result = encoder.transform(probe)
+    if Encoder is OneHotEncoder:
+        assert_array_equal(result.toarray(), np.zeros((2, 2)))
+    else:
+        assert_array_equal(result, [[-1], [-1]])
