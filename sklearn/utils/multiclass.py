@@ -11,7 +11,7 @@ import numpy as np
 from scipy.sparse import issparse
 
 from sklearn.utils._array_api import _is_numpy_namespace, get_namespace
-from sklearn.utils._unique import attach_unique, cached_unique
+from sklearn.utils._unique import _metadata_cache, attach_unique, cached_unique
 from sklearn.utils.validation import _assert_all_finite, _num_samples, check_array
 
 
@@ -37,6 +37,7 @@ _FN_UNIQUE_LABELS = {
 }
 
 
+@_metadata_cache()
 def unique_labels(*ys, ys_types=None):
     """Extract an ordered array of unique labels.
 
@@ -243,6 +244,7 @@ def check_classification_targets(y):
             )
 
 
+@_metadata_cache()
 def type_of_target(y, input_name="", raise_unknown=False):
     """Determine the type of data indicated by the target.
 

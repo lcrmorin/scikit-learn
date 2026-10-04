@@ -22,6 +22,10 @@ encoding, label encoding/binarization, repeated target checks and accuracy score
 unique-metadata caching, and an encoding/classification pipeline with held-out
 prediction. LabelBinarizer uses sparse output to avoid quadratic dense storage.
 
+The ``cache`` operation computes unique values once and requests them ten times
+within one read-only metadata-cache scope. This measures reuse within an
+operation; it does not retain results across separate public calls or mutations.
+
 Every case compares identical values in StringDType, object and fixed-width
 Unicode arrays. Category order, missing-value behavior, encoded values and
 predictions are checked against an object-array control outside measured regions.

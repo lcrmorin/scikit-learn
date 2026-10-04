@@ -46,7 +46,7 @@ from sklearn.preprocessing import (
 )
 from sklearn.utils._encode import _unique
 from sklearn.utils._missing import is_scalar_nan
-from sklearn.utils._unique import attach_unique, cached_unique
+from sklearn.utils._unique import _metadata_cache, attach_unique, cached_unique
 from sklearn.utils.multiclass import type_of_target
 from sklearn.utils.validation import check_array
 
@@ -111,8 +111,9 @@ def execute(operation, X):
             target_type=type_of_target(X),
         )
     if operation == "cache":
-        cached = attach_unique(X)
-        categories = [cached_unique(cached) for _ in range(10)]
+        with _metadata_cache():
+            cached = attach_unique(X)
+            categories = [cached_unique(cached) for _ in range(10)]
         return dict(categories=categories)
     if operation == "pipeline":
         # The numeric target depends on string content, not representation or sorting.
