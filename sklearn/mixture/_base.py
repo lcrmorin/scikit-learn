@@ -366,7 +366,8 @@ class BaseMixture(DensityMixin, BaseEstimator, metaclass=ABCMeta):
             Log-likelihood of each sample in `X` under the current model.
         """
         check_is_fitted(self)
-        X = validate_data(self, X, reset=False)
+        xp, _ = get_namespace(X)
+        X = validate_data(self, X, dtype=[xp.float64, xp.float32], reset=False)
 
         return _logsumexp(self._estimate_weighted_log_prob(X), axis=1)
 
@@ -406,7 +407,7 @@ class BaseMixture(DensityMixin, BaseEstimator, metaclass=ABCMeta):
         """
         check_is_fitted(self)
         xp, _ = get_namespace(X)
-        X = validate_data(self, X, reset=False)
+        X = validate_data(self, X, dtype=[xp.float64, xp.float32], reset=False)
         return xp.argmax(self._estimate_weighted_log_prob(X), axis=1)
 
     def predict_proba(self, X):
@@ -424,7 +425,8 @@ class BaseMixture(DensityMixin, BaseEstimator, metaclass=ABCMeta):
             Density of each Gaussian component for each sample in X.
         """
         check_is_fitted(self)
-        X = validate_data(self, X, reset=False)
+        xp, _ = get_namespace(X)
+        X = validate_data(self, X, dtype=[xp.float64, xp.float32], reset=False)
         xp, _ = get_namespace(X)
         _, log_resp = self._estimate_log_prob_resp(X, xp=xp)
         return xp.exp(log_resp)

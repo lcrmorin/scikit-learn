@@ -99,11 +99,6 @@ def test_sparse_pandas_estimator_matches_scipy(estimator, dtype):
         (BayesianGaussianMixture(random_state=0), "score_samples"),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="NumPy Boolean arithmetic differs from the floating-point control",
-)
 def test_numpy_boolean_estimator_matches_float(estimator, method):
     # This is an estimator/NumPy Boolean issue, not a nullable-pandas regression.
     X, y = _data()
