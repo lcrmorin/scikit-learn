@@ -66,3 +66,31 @@ StringDType operations that fail before the patch represent newly supported
 behavior, not measurable speedups. The JSON records the imported checkout path,
 commit, package versions, platform and dataset configuration. Timing runs on two
 NumPy versions alone do not establish the patch's performance overhead.
+
+Diagnosing remaining costs
+-------------------------
+The JSON includes ``stage_seconds`` for category discovery, mapping, object
+conversion, encoder fit/transform, label binarization, scoring, and pipeline
+fit/prediction. Stage timings are nested within total operation time; do not add
+them to it. Pipeline target construction is reported separately and should be
+excluded when comparing estimator execution costs. Mapping includes discovery
+in the total, but its ``mapping`` stage uses already discovered categories.
+
+Compare native category discovery with a one-time object conversion (including
+allocation cost)::
+
+    python benchmarks/bench_stringdtype.py --rows 100000 --repeats 3 \
+        --profiles short unique --operations discovery object_unique mapping \
+        --output /tmp/stringdtype-stages.json
+
+``object_unique`` is an experimental alternative, not an automatic conversion
+in scikit-learn. Its result is checked against the native discovery result as
+well as the object control. For memory, repeat ``storage cache pipeline`` with
+``--object-layout fresh`` and profiles ``short unique``. The unique profile has
+one distinct string per row; the short profile has a repeated vocabulary.
+Compare both layouts with the same row count. Cache peaks include the retained
+unique array until the operation completes.
+
+Reports record whether the imported checkout has uncommitted changes. Retain
+the exact patch alongside results from a dirty checkout; its commit alone does
+not identify the measured implementation.

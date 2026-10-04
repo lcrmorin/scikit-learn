@@ -44,13 +44,26 @@ from sklearn.preprocessing import (
     OneHotEncoder,
     OrdinalEncoder,
 )
-from sklearn.utils._encode import _unique
+from sklearn.utils._encode import _encode, _unique
 from sklearn.utils._missing import is_scalar_nan
 from sklearn.utils._unique import _metadata_cache, attach_unique, cached_unique
-from sklearn.utils.multiclass import type_of_target
+from sklearn.utils.multiclass import check_classification_targets, type_of_target
 from sklearn.utils.validation import check_array
 
-OPERATIONS = ("storage", "unique", "ordinal", "onehot", "labels", "cache", "pipeline")
+OPERATIONS = (
+    "storage",
+    "unique",
+    "discovery",
+    "mapping",
+    "conversion",
+    "object_unique",
+    "targets",
+    "ordinal",
+    "onehot",
+    "labels",
+    "cache",
+    "pipeline",
+)
 PROFILES = ("short", "long_tail", "unicode", "unique", "missing")
 
 
@@ -76,7 +89,29 @@ def make_values(rows, profile, layout):
     return values
 
 
-def execute(operation, X):
+def execute(operation, X, timings=None):
+    def measure(name, function):
+        start = time.perf_counter()
+        result = function()
+        if timings is not None:
+            timings[name] = timings.get(name, 0) + time.perf_counter() - start
+        return result
+
+    if operation == "discovery":
+        return dict(categories=measure("discovery", lambda: _unique(X)))
+    if operation == "conversion":
+        return dict(values=measure("to_object", lambda: np.asarray(X, dtype=object)))
+    if operation == "object_unique":
+        values = measure("to_object", lambda: np.asarray(X, dtype=object))
+        return dict(categories=measure("object_discovery", lambda: _unique(values)))
+    if operation == "mapping":
+        categories = measure("discovery", lambda: _unique(X))
+        codes = measure("mapping", lambda: _encode(X, uniques=categories))
+        return dict(categories=categories, codes=codes)
+    if operation == "targets":
+        measure("target_validation", lambda: check_classification_targets(X))
+        return dict(valid=True)
+
     if operation == "storage":
         return {
             "values": check_array(
@@ -94,14 +129,16 @@ def execute(operation, X):
             if operation == "ordinal"
             else OneHotEncoder(handle_unknown="ignore")
         )
-        encoded = estimator.fit_transform(X.reshape(-1, 1))
+        column = X.reshape(-1, 1)
+        measure("fit", lambda: estimator.fit(column))
+        encoded = measure("transform", lambda: estimator.transform(column))
         return dict(encoded=encoded, categories=estimator.categories_[0])
     if operation == "labels":
         encoder, binarizer = LabelEncoder(), LabelBinarizer(sparse_output=True)
-        codes = encoder.fit_transform(X)
-        binary = binarizer.fit_transform(X)
+        codes = measure("label_encoder", lambda: encoder.fit_transform(X))
+        binary = measure("label_binarizer", lambda: binarizer.fit_transform(X))
         # Repeated public target detection/scoring complements the cache microbenchmark.
-        scores = [accuracy_score(X, X) for _ in range(5)]
+        scores = measure("scoring", lambda: [accuracy_score(X, X) for _ in range(5)])
         return dict(
             codes=codes,
             binary=binary,
@@ -117,15 +154,25 @@ def execute(operation, X):
         return dict(categories=categories)
     if operation == "pipeline":
         # The numeric target depends on string content, not representation or sorting.
-        y = np.array([sum(str(value).encode("utf-8")) % 2 for value in X])
+        y = measure(
+            "target_construction",
+            lambda: np.array([sum(str(value).encode("utf-8")) % 2 for value in X]),
+        )
         split = len(X) * 4 // 5
         pipeline = make_pipeline(
             OneHotEncoder(handle_unknown="ignore"), LogisticRegression(max_iter=100)
         )
-        pipeline.fit(X[:split].reshape(-1, 1), y[:split])
+        measure(
+            "pipeline_fit", lambda: pipeline.fit(X[:split].reshape(-1, 1), y[:split])
+        )
         return dict(
-            prediction=pipeline.predict(X[split:].reshape(-1, 1)),
-            probabilities=pipeline.predict_proba(X[split:].reshape(-1, 1)),
+            prediction=measure(
+                "predict", lambda: pipeline.predict(X[split:].reshape(-1, 1))
+            ),
+            probabilities=measure(
+                "predict_proba",
+                lambda: pipeline.predict_proba(X[split:].reshape(-1, 1)),
+            ),
             categories=pipeline[0].categories_[0],
         )
     raise ValueError(operation)
@@ -158,7 +205,8 @@ def equivalent(actual, expected):
 
 def worker(args):
     if args.profile == "missing" and (
-        args.representation == "unicode" or args.operation in ("labels", "cache")
+        args.representation == "unicode"
+        or args.operation in ("labels", "cache", "targets")
     ):
         return dict(status="excluded", reason="No equivalent sentinel/label contract")
     process = psutil.Process()
@@ -188,7 +236,8 @@ def worker(args):
     monitor.start()
     try:
         start = time.perf_counter()
-        actual = execute(args.operation, X)
+        stage_seconds = {}
+        actual = execute(args.operation, X, stage_seconds)
         seconds = time.perf_counter() - start
     finally:
         samples.append(process.memory_info().rss)
@@ -196,6 +245,7 @@ def worker(args):
         monitor.join()
     result = dict(
         status="pass",
+        stage_seconds=stage_seconds,
         construction_seconds=construction_seconds,
         seconds=seconds,
         rss_baseline=rss_baseline,
@@ -214,6 +264,8 @@ def worker(args):
     # Reference allocation and comparisons must not contaminate measured peaks.
     reference = execute(args.operation, np.asarray(X, dtype=object))
     equivalent(actual, reference)
+    if args.operation == "object_unique":
+        equivalent(actual, execute("discovery", X))
     return result
 
 
@@ -270,7 +322,15 @@ def main():
         capture_output=True,
         text=True,
     )
+    dirty = (
+        subprocess.run(
+            ["git", "diff", "--quiet", "HEAD"], cwd=Path(sklearn.__file__).parent
+        ).returncode
+        != 0
+    )
     report = dict(
+        benchmark_schema=2,
+        working_tree_dirty=dirty,
         numpy=np.__version__,
         sklearn=sklearn.__version__,
         sklearn_path=sklearn.__file__,
