@@ -926,7 +926,7 @@ def check_array(
     ):
         # Throw warning if some columns are sparse. If all columns are sparse, then
         # array.sparse exists and sparsity will be preserved (later).
-        from pandas import SparseDtype
+        from pandas import SparseDtype, isna
 
         def is_pd_sparse(dtype):
             return isinstance(dtype, SparseDtype)
@@ -937,6 +937,11 @@ def check_array(
             # All columns of the pandas.DataFrame are sparse. Note that the `sparse`
             # attribute is not a guaranteed detection for all sparse columns.
             is_pandas_fully_sparse_df = True
+            if any(isna(d.fill_value) or d.fill_value != 0 for d in df_pandas.dtypes):
+                raise ValueError(
+                    "Sparse pandas fill value must be 0 to convert to a SciPy "
+                    "sparse matrix without changing values."
+                )
         elif df_pandas.dtypes.apply(is_pd_sparse).any():
             warnings.warn(
                 "pandas.DataFrame with sparse columns found."

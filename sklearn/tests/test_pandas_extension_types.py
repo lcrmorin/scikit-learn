@@ -7,7 +7,6 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 from scipy import sparse
 
-from sklearn.externals._packaging.version import parse as parse_version
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, OrdinalEncoder, StandardScaler
@@ -179,16 +178,8 @@ def test_arrow_nested_numeric_rejection(kind):
 
 
 @pytest.mark.parametrize("fill", [1.0, np.nan])
-def test_sparse_nonzero_fill_preserved_or_rejected(fill, request):
+def test_sparse_nonzero_fill_preserved_or_rejected(fill):
     pd = pytest.importorskip("pandas")
-    if parse_version(pd.__version__) >= parse_version("3.0"):
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="Nonzero sparse fill values are silently replaced by zero",
-            )
-        )
     X = pd.DataFrame(
         {"x": pd.Series([fill, 2.0, fill], dtype=pd.SparseDtype("float32", fill))}
     )
