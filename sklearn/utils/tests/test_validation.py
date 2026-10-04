@@ -2739,3 +2739,38 @@ def test_nullable_integer_missing_precision(
         X = nullable_container([-(2**53 + 1), None, 1], pd_dtype)
         with pytest.raises(ValueError, match="would lose precision"):
             check_array(X, dtype=dtype, ensure_2d=False, ensure_all_finite="allow-nan")
+
+
+@pytest.mark.parametrize("backend", ["numpy_nullable", "pyarrow"])
+@pytest.mark.parametrize("classifier_name", ["sgd", "logistic"])
+def test_nullable_float32_pipeline_preserves_precision(backend, classifier_name):
+    pd = pytest.importorskip("pandas")
+    if backend == "pyarrow":
+        pytest.importorskip("pyarrow")
+    from sklearn.impute import SimpleImputer
+    from sklearn.linear_model import LogisticRegression, SGDClassifier
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    rng = np.random.RandomState(0)
+    values = rng.normal(size=(80, 4)).astype(np.float32)
+    y = (values[:, 0] > 0).astype(int)
+    values[::5, 1] = np.nan
+    X = pd.DataFrame(values, dtype=_nullable_pandas_dtype("Float32", backend))
+    original = X.copy(deep=True)
+
+    def make_estimator():
+        classifier = (
+            SGDClassifier(random_state=0, max_iter=1000)
+            if classifier_name == "sgd"
+            else LogisticRegression()
+        )
+        return make_pipeline(SimpleImputer(), StandardScaler(), classifier)
+
+    estimator = make_estimator().fit(X, y)
+    reference = make_estimator().fit(values, y)
+    transformed = estimator[:-1].transform(X)
+    assert transformed.dtype == np.float32
+    assert transformed.nbytes == values.nbytes
+    assert_array_equal(estimator.predict(X), reference.predict(values))
+    pd.testing.assert_frame_equal(X, original)

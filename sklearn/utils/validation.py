@@ -805,6 +805,18 @@ def check_array(
         If dtype is a list of types, conversion on the first type is only
         performed if the dtype of the input is not in the list.
 
+        For pandas nullable numeric inputs, a compatible NumPy dtype is used:
+        floating-point widths are preserved, and integer values without missing
+        entries remain integers. Missing entries are represented by ``np.nan``
+        when converting to floating point. Conversion to a NumPy integer dtype
+        raises an error if any values are missing.
+
+        With ``dtype=None`` or ``dtype="numeric"``, nullable integer inputs with
+        missing values raise an error if conversion to float64 would round an
+        integer value. An explicitly requested floating-point dtype permits
+        rounding. Mixed integer and floating-point columns follow NumPy's
+        common-dtype promotion rules and can also lose integer precision.
+
     order : {'F', 'C'} or None, default=None
         Whether an array will be forced to be fortran or c-style.
         When order is None (default), then if copy=False, nothing is ensured
