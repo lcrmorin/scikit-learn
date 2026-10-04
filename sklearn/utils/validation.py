@@ -962,6 +962,8 @@ def check_array(
                 pandas_numeric_array = df_pandas
         if all(isinstance(dtype_iter, np.dtype) for dtype_iter in dtypes_orig):
             dtype_orig = np.result_type(*dtypes_orig)
+        elif is_pandas_fully_sparse_df:
+            dtype_orig = np.result_type(*(d.subtype for d in dtypes_orig))
         elif has_pandas_string:
             # Force object if any of the dtypes is a StringDtype.
             dtype_orig = object

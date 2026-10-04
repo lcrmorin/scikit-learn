@@ -74,11 +74,6 @@ def test_sparse_dataframe_stays_sparse(dtype, missing):
             check_array(X, accept_sparse=True)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="Sparse pandas float32 is widened to float64 by StandardScaler",
-)
 def test_sparse_pipeline_preserves_sparse_output():
     pd = pytest.importorskip("pandas")
     values = np.tile([[0.0, 1.0], [1.0, 0.0]], (10, 1)).astype(np.float32)
