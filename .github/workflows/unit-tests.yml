@@ -26,7 +26,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    if: github.repository == 'scikit-learn/scikit-learn'
+    if: github.repository == 'lcrmorin/scikit-learn'
 
     steps:
       - name: Checkout
@@ -48,7 +48,7 @@ jobs:
   retrieve-commit-message:
     name: Retrieve the latest commit message
     runs-on: ubuntu-latest
-    if: github.repository == 'scikit-learn/scikit-learn'
+    if: github.repository == 'lcrmorin/scikit-learn'
     outputs:
       message: ${{ steps.git-log.outputs.message }}
     steps:
@@ -82,7 +82,7 @@ jobs:
     #     ...
     name: Retrieve the selected tests
     runs-on: ubuntu-latest
-    if: github.repository == 'scikit-learn/scikit-learn'
+    if: github.repository == 'lcrmorin/scikit-learn'
     outputs:
       tests: ${{ steps.selected-tests.outputs.tests }}
     needs: [retrieve-commit-message]
@@ -113,7 +113,7 @@ jobs:
   unit-tests:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    if: github.repository == 'scikit-learn/scikit-learn'
+    if: github.repository == 'lcrmorin/scikit-learn'
     needs: [lint, retrieve-commit-message, retrieve-selected-tests]
     strategy:
       # Ensures that all builds run to completion even if one of them fails
@@ -486,7 +486,7 @@ jobs:
   check-job-statuses:
     name: Check all job statuses
     runs-on: ubuntu-latest
-    if: always() && github.repository == 'scikit-learn/scikit-learn'
+    if: always() && github.repository == 'lcrmorin/scikit-learn'
     needs: [lint, unit-tests, debian-32bit, free-threaded, scipy-dev]
     steps:
       - uses: re-actors/alls-green@release/v1
