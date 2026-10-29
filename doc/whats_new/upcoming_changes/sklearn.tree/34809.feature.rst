@@ -1,0 +1,3 @@
+- :func:`tree.export_dict` exports a fitted decision tree as a nested dict,
+  including categorical splits, optionally writing it to `out_file` as JSON.
+  By :user:`lcrmorin`.

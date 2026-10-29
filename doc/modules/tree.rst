@@ -235,6 +235,65 @@ Once trained, you can plot the tree with the :func:`plot_tree` function::
   Category labels are not rounded. Large categorical splits can produce long
   labels, including when the tree uses random categorical splits.
 
+  Alternatively, the tree can be exported as a nested dict with the
+  function :func:`export_dict`::
+
+      >>> from sklearn.tree import export_dict
+      >>> tree_dict = export_dict(decision_tree, feature_names=iris['feature_names'])
+      >>> tree_dict['feature_name']
+      'petal width (cm)'
+
+  For a single-output classifier, the following example traverses the exported
+  tree and reads the predicted class. Numerical inputs are converted to
+  ``float32``, and categorical labels are mapped to their exported codes::
+
+      >>> import numpy as np
+      >>> def predict_from_dict(tree_dict, row):
+      ...     categories = {
+      ...         item["feature"]: item["categories"]
+      ...         for item in tree_dict.get("categorical_features", [])
+      ...     }
+      ...     node = tree_dict
+      ...     while "left" in node:
+      ...         feature = node["feature"]
+      ...         value = row[feature]
+      ...         if "categories_left" in node:
+      ...             try:
+      ...                 code = categories[feature].index(value)
+      ...             except ValueError:  # Missing or unknown category.
+      ...                 go_left = node["missing_go_to_left"]
+      ...             else:
+      ...                 go_left = code in node["categories_left"]
+      ...         else:
+      ...             value = float(np.float32(value))
+      ...             go_left = (node["missing_go_to_left"] if np.isnan(value)
+      ...                        else value <= float(node["threshold"]))
+      ...         node = node["left"] if go_left else node["right"]
+      ...     return node["class"]
+      >>> predict_from_dict(tree_dict, iris.data[0])
+      0
+      >>> bool(predict_from_dict(tree_dict, iris.data[0]) == decision_tree.predict(
+      ...     iris.data[:1])[0])
+      True
+
+  The same traversal handles categorical labels and unknown categories::
+
+      >>> X_cat = np.array([["blue"], ["green"], ["red"], ["blue"]], dtype=object)
+      >>> cat_tree = tree.DecisionTreeClassifier(
+      ...     categorical_features=[0], random_state=0
+      ... ).fit(X_cat, [0, 1, 0, 0])
+      >>> cat_dict = export_dict(cat_tree)
+      >>> cat_dict["categorical_features"]
+      [{'feature': 0, 'categories': ['blue', 'green', 'red']}]
+      >>> probes = np.array([["green"], ["unknown"], [np.nan]], dtype=object)
+      >>> [predict_from_dict(cat_dict, row) for row in probes] == cat_tree.predict(
+      ...     probes).tolist()
+      True
+
+  This example uses the default full, unrounded export and original class labels.
+  It does not replace estimator input validation. See :func:`export_dict` for
+  the output schema, missing-value support and limitations.
+
 .. rubric:: Examples
 
 * :ref:`sphx_glr_auto_examples_tree_plot_iris_dtc.py`
