@@ -920,13 +920,13 @@ class NewtonCholeskySolver(NewtonSolver):
                 penalty[-n_classes:] = 0
             self.hessian += xp.eye(size, dtype=X.dtype, device=device) * penalty
 
-    def prepare_gradient_hessian(self):
+    def prepare_gradient_hessian(self, gradient, hessian):
         """Prepare gradient and hessian, in particular for the multiclass case.
 
-        This can't go into update_gradient_hessian because we need to keep the original
-        self.gradient and self.hessian for line search and convergence checks.
+        For multinomial losses, zero the fixed parameters in the supplied buffers
+        and return the reduced system.
         """
-        xp, _, _ = get_namespace_and_device(self.coef)
+        xp, _, _ = get_namespace_and_device(gradient)
         # Note: The following case distinction could also be shifted to the
         # implementation of HalfMultinomialLoss instead of here within the solver.
         if self.is_multinomial_no_penalty:
@@ -948,9 +948,9 @@ class NewtonCholeskySolver(NewtonSolver):
             n_classes = self.linear_loss.base_loss.n_classes
             n_dof = self.coef.shape[0] // n_classes  # degree of freedom per class
             n = self.coef.shape[0] - n_dof  # effective size
-            self.gradient[n_classes - 1 :: n_classes] = 0
-            self.hessian[n_classes - 1 :: n_classes, :] = 0
-            self.hessian[:, n_classes - 1 :: n_classes] = 0
+            gradient[n_classes - 1 :: n_classes] = 0
+            hessian[n_classes - 1 :: n_classes, :] = 0
+            hessian[:, n_classes - 1 :: n_classes] = 0
             # We also need the reduced variants of gradient and hessian where the
             # entries set to zero are removed. For 2 features and 3 classes with
             # arbitrary values, "x" means removed:
@@ -963,9 +963,9 @@ class NewtonCholeskySolver(NewtonSolver):
             #             [4, 10, x, 22, 28, x]
             #             [x,  x, x,  x, x,  x]
             # The following slicing triggers copies of gradient and hessian.
-            gradient = _ravel(xp.reshape(self.gradient, (-1, n_classes))[:, :-1], xp=xp)
+            gradient = _ravel(xp.reshape(gradient, (-1, n_classes))[:, :-1], xp=xp)
             hessian = xp.reshape(
-                xp.reshape(self.hessian, (n_dof, n_classes, n_dof, n_classes))[
+                xp.reshape(hessian, (n_dof, n_classes, n_dof, n_classes))[
                     :, :-1, :, :-1
                 ],
                 (n, n),
@@ -974,12 +974,10 @@ class NewtonCholeskySolver(NewtonSolver):
             # Here, only intercepts are unpenalized. We again choose the last class and
             # set its intercept to zero.
             # Note that coef was already dealt with in setup.
-            self.gradient[-1] = 0
-            self.hessian[-1, :] = 0
-            self.hessian[:, -1] = 0
-            gradient, hessian = self.gradient[:-1], self.hessian[:-1, :-1]
-        else:
-            gradient, hessian = self.gradient, self.hessian
+            gradient[-1] = 0
+            hessian[-1, :] = 0
+            hessian[:, -1] = 0
+            gradient, hessian = gradient[:-1], hessian[:-1, :-1]
         return gradient, hessian
 
     def inner_solve(self, X, y, sample_weight):
@@ -1000,7 +998,7 @@ class NewtonCholeskySolver(NewtonSolver):
             self.use_fallback_lbfgs_solve = True
             return
 
-        gradient, hessian = self.prepare_gradient_hessian()
+        gradient, hessian = self.prepare_gradient_hessian(self.gradient, self.hessian)
 
         xp, _, _ = get_namespace_and_device(X)
         try:
@@ -1223,7 +1221,10 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
 
         xp, _, device = get_namespace_and_device(X)
         if _is_numpy_namespace(xp):
-            self._inner_solve_numpy(X)
+            self.coef_newton = self._inner_solve_numpy(
+                X, self.coef, self.gradient, self.hessian
+            )
+            self.gradient_times_newton = self.gradient @ self.coef_newton
             return
 
         # The compiled Gram solver needs CPU arrays. Its y argument is only
@@ -1240,57 +1241,52 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
                 y_cd = y_cd - xp.sum(y_cd * h) / xp.sum(h)
             y_norm = float(xp.linalg.vector_norm(y_cd * xp.sqrt(h)))
 
-        coef, gradient, hessian = self.coef, self.gradient, self.hessian
-        self.coef, self.gradient, self.hessian = move_to(
-            coef, gradient, hessian, xp=np, device="cpu"
+        coef, gradient, hessian = move_to(
+            self.coef, self.gradient, self.hessian, xp=np, device="cpu"
         )
         # Some backends expose read-only NumPy views via DLPack.
-        self.gradient = self.gradient.copy()
+        gradient = gradient.copy()
         if self.linear_loss.base_loss.is_multiclass:
-            self.hessian = self.hessian.copy()
-        try:
-            self._inner_solve_numpy(X, y_cd=np.array([y_norm], dtype=self.coef.dtype))
-            step = move_to(self.coef_newton, xp=xp, device=device)
-            new_gradient = move_to(self.gradient, xp=xp, device=device)
-        finally:
-            self.coef, self.gradient, self.hessian = coef, gradient, hessian
-        self.coef_newton = step
-        self.gradient = new_gradient
-        self.gradient_times_newton = self.gradient @ step
+            hessian = hessian.copy()
+        step = self._inner_solve_numpy(
+            X, coef, gradient, hessian, y_cd=np.array([y_norm], dtype=coef.dtype)
+        )
+        self.coef_newton, self.gradient = move_to(step, gradient, xp=xp, device=device)
+        self.gradient_times_newton = self.gradient @ self.coef_newton
 
-    def _inner_solve_numpy(self, X, y_cd=None):
+    def _inner_solve_numpy(self, X, coef, full_gradient, hessian, y_cd=None):
         n_samples, n_features = X.shape
-        gradient, hessian = self.prepare_gradient_hessian()
+        gradient, hessian = self.prepare_gradient_hessian(full_gradient, hessian)
         # TODO: Pass correct y=b (see NewtonCDSolver), or at least y=||b||_2^2.
 
         if self.linear_loss.base_loss.is_multiclass:
             # Often needed variables for the multinomial.
             n_classes = self.linear_loss.base_loss.n_classes
-            n_dof = self.coef.size // n_classes  # degree of freedom per class
+            n_dof = coef.size // n_classes  # degree of freedom per class
 
         # Set w (coefficient passed to enet-cd) and Hcoef = H @ coef.
         if self.is_multinomial_no_penalty:
             # This is similar to penalized multinomial, but on top the last class per
             # feature was set to zero together with the corresponding elements in
             # gradient and hessian.
-            coef = self.coef.reshape(-1, n_classes)[:, :-1].flatten()
-            Hcoef = hessian @ coef
+            reduced_coef = coef.reshape(-1, n_classes)[:, :-1].flatten()
+            Hcoef = hessian @ reduced_coef
             if self.linear_loss.fit_intercept:
                 # n_pc = number of effective coefficients, we keep the name from below.
                 n_pc = (n_classes - 1) * (n_dof - 1)
             else:
                 n_pc = (n_classes - 1) * n_dof
-            w = coef[:n_pc].copy()
+            w = reduced_coef[:n_pc].copy()
         elif self.is_multinomial_with_intercept:
-            Hcoef = hessian @ self.coef[:-1]
+            Hcoef = hessian @ coef[:-1]
             n_pc = n_classes * (n_dof - 1)  # number of penalized coefficients
-            w = self.coef[:n_pc].copy()
+            w = coef[:n_pc].copy()
         elif self.linear_loss.fit_intercept:
-            Hcoef = hessian @ self.coef
-            w = self.coef[:-1].copy()
+            Hcoef = hessian @ coef
+            w = coef[:-1].copy()
         else:
-            Hcoef = hessian @ self.coef
-            w = self.coef.copy()
+            Hcoef = hessian @ coef
+            w = coef.copy()
 
         # We minimize the 2. order Taylor approximation of the loss:
         #   1/2 c' H c + (G' - coef' H) c + l1_reg ||c||_1
@@ -1393,11 +1389,11 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
                 early_stopping=False,
             )
 
-        # Set self.coef_newton and compute intercept terms.
+        # Set step and compute intercept terms.
         if n_inner_iter == 0:
             # Safeguard: if nothing changed, nothing should change in this iter.
             # Without it, intercept terms might change.
-            self.coef_newton = np.zeros_like(self.coef)
+            step = np.zeros_like(coef)
         elif self.is_multinomial_no_penalty:
             if self.linear_loss.fit_intercept:
                 # Add intercept terms, except for the intercept of the last class.
@@ -1407,14 +1403,14 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
             # coefficients.
             w = w.reshape(-1, n_classes - 1)
             w = np.c_[w, np.zeros(w.shape[0])].flatten()
-            self.coef_newton = w - self.coef
+            step = w - coef
         elif self.is_multinomial_with_intercept:
             intercepts = Q00_inv @ (q0 - Q0 @ w)
-            self.coef_newton = np.r_[w, intercepts, 0] - self.coef
+            step = np.r_[w, intercepts, 0] - coef
         elif self.linear_loss.fit_intercept:
-            self.coef_newton = np.r_[w, (q0 - Q0 @ w) / Q00] - self.coef
+            step = np.r_[w, (q0 - Q0 @ w) / Q00] - coef
         else:
-            self.coef_newton = w - self.coef
+            step = w - coef
 
         # Tighten inner stopping criterion, see Chapter 6.1 of "An Improved GLMNET".
         if n_inner_iter == 0:
@@ -1434,26 +1430,22 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
         if self.l2_reg_strength:
             # We neglected the l2_reg_strength in update_gradient_hessian. We correct it
             # now for the gradient.
-            weights, _ = self.linear_loss.weight_intercept(self.coef)
+            weights, _ = self.linear_loss.weight_intercept(coef)
             if self.linear_loss.base_loss.is_multiclass:
                 # weights.shape = (n_classes, n_dof)
-                self.gradient.reshape((n_classes, -1), order="F")[:, :n_features] += (
+                full_gradient.reshape((n_classes, -1), order="F")[:, :n_features] += (
                     self.l2_reg_strength * weights
                 )
             else:
-                self.gradient[:n_features] += self.l2_reg_strength * weights
+                full_gradient[:n_features] += self.l2_reg_strength * weights
 
-        self.gradient_times_newton = self.gradient @ self.coef_newton
-        if self.gradient_times_newton > 0:
-            if self.verbose:
-                # TODO(newton-cd): What to do?
-                print(
-                    "  The inner solver found a Newton step that is not a "
-                    "descent direction."
-                )
-            return
-
-        return
+        if self.verbose and full_gradient @ step > 0:
+            # TODO(newton-cd): What to do?
+            print(
+                "  The inner solver found a Newton step that is not a "
+                "descent direction."
+            )
+        return step
 
     def compute_d2(self, X, sample_weight):
         """Compute square of Newton decrement."""
