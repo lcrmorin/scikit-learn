@@ -25,6 +25,7 @@ from sklearn.linear_model._cd_fast import (
 )
 from sklearn.linear_model._linear_loss import (
     LinearModelLoss,
+    sandwich_dot,
 )
 from sklearn.linear_model._ridge import _SingularMatrixError, _solve_spd
 from sklearn.utils._array_api import (
@@ -46,14 +47,12 @@ def _tiled_sandwich_dot(X, curvature):
     itemsize = 8 if X.dtype == xp.float64 else 4
     rows_per_tile = max(1, _ARRAY_API_HESSIAN_TILE_BYTES // (X.shape[1] * itemsize))
     if rows_per_tile >= X.shape[0]:
-        return X.T @ (curvature[:, None] * X)
-    first = X[:rows_per_tile, :]
-    result = first.T @ (curvature[:rows_per_tile, None] * first)
+        return sandwich_dot(X, curvature)
+    result = sandwich_dot(X[:rows_per_tile, :], curvature[:rows_per_tile])
     for start in range(rows_per_tile, X.shape[0], rows_per_tile):
         end = start + rows_per_tile
         stop = end if end < X.shape[0] else None
-        tile = X[start:stop, :]
-        result += tile.T @ (curvature[start:stop, None] * tile)
+        result += sandwich_dot(X[start:stop, :], curvature[start:stop])
     return result
 
 
@@ -833,8 +832,6 @@ class NewtonCholeskySolver(NewtonSolver):
             nonpositive = xp.astype(curvature <= 0, X.dtype)
             if sample_weight is not None:
                 nonpositive = nonpositive * sample_weight
-            self.grad_pointwise = gradient
-            self.hess_pointwise = xp.abs(curvature)
             self.hessian_warning = bool(xp.sum(nonpositive) / weight_sum > 0.25)
             if self.hessian_warning:
                 return
@@ -842,6 +839,8 @@ class NewtonCholeskySolver(NewtonSolver):
             weights, _ = self.linear_loss.weight_intercept(self.coef)
             self.gradient = X.T @ gradient + self.l2_reg_strength * weights
             curvature = xp.abs(curvature)
+            self.grad_pointwise = gradient
+            self.hess_pointwise = curvature
             self.hessian = _tiled_sandwich_dot(X, curvature)
             if self.l2_reg_strength > 0:
                 self.hessian += self.l2_reg_strength * xp.eye(
