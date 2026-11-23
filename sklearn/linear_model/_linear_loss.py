@@ -257,11 +257,8 @@ class LinearModelLoss:
 
     def l1_penalty(self, weights, l1_reg_strength):
         """Compute L1 penalty term: l1_reg_strength * ||w||_1."""
-        # TODO(numpy 2.0): use np.linalg.vector_norm
-        if weights.ndim == 1:
-            norm1_w = np.linalg.norm(weights, ord=1)
-        else:
-            norm1_w = np.sum(np.abs(weights))
+        xp, _ = get_namespace(weights)
+        norm1_w = xp.sum(xp.abs(weights))
         return float(l1_reg_strength * norm1_w)
 
     def l2_penalty(self, weights, l2_reg_strength):

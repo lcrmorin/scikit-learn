@@ -457,7 +457,7 @@ def _logistic_regression_path(
 
     xp, _, device = get_namespace_and_device(X)
     # L-BFGS still needs coef / w0 as NumPy arrays.
-    coef_as_xp = solver in ("newton-cg", "newton-cholesky")
+    coef_as_xp = solver in ("newton-cg", "newton-cholesky", "newton-cd-gram")
 
     # Preprocessing.
     if check_input:
@@ -1601,6 +1601,11 @@ class LogisticRegression(
             dual=self.dual,
         )
         xp, _, device = get_namespace_and_device(X)
+        if self.solver_ == "newton-cd" and not _is_numpy_namespace(xp):
+            raise ValueError(
+                "The 'newton-cd' solver does not support Array API inputs. "
+                "Select 'newton-cd-gram' explicitly if its Hessian fits in memory."
+            )
         sample_weight = move_to(sample_weight, xp=xp, device=device)
         xp_y, _ = get_namespace(y)
 
@@ -1822,15 +1827,13 @@ class LogisticRegression(
     def __sklearn_tags__(self):
         tags = super().__sklearn_tags__()
         tags.input_tags.sparse = True
-        if self.l1_ratio is None:
-            l1_penalty = False
-        else:
-            l1_penalty = self.l1_ratio > 0
         tags.array_api_support = self.solver in (
+            "auto",
             "lbfgs",
             "newton-cg",
             "newton-cholesky",
-        ) or (self.solver == "auto" and not l1_penalty)
+            "newton-cd-gram",
+        )
         if self.solver == "liblinear":
             tags.classifier_tags.multi_class = False
 

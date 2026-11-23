@@ -164,7 +164,10 @@ Estimators
   `svd_solver="randomized"` (`svd_solver="randomized"` only if `power_iteration_normalizer="QR"`))
 - :class:`kernel_approximation.Nystroem`
 - :class:`linear_model.LogisticRegression` (with `solver="lbfgs"`, `solver="newton-cg"`,
-  or `solver="newton-cholesky"`)
+  `solver="newton-cholesky"`, or `solver="newton-cd-gram"`).
+  With `solver="auto"`, support depends on the selected solver.
+  The Gram solver computes the Hessian in row tiles on the input device and
+  solves the coordinate descent subproblem on the CPU.
 - :class:`linear_model.LogisticRegressionCV` (with `solver="lbfgs"` and `solver="newton-cg"`)
 - :class:`linear_model.PoissonRegressor` (with `solver="lbfgs"` and `solver="newton-cg"`)
 - :class:`linear_model.Ridge` (with `solver="cholesky"` and `solver="svd"`)

@@ -36,6 +36,26 @@ from sklearn.utils._array_api import (
 from sklearn.utils.fixes import _get_additional_lbfgs_options_dict
 from sklearn.utils.optimize import _check_optimize_result
 
+# Bound the temporary weighted design on Array API devices.
+_ARRAY_API_HESSIAN_TILE_BYTES = 8 * 1024**2
+
+
+def _tiled_sandwich_dot(X, curvature):
+    """Compute X.T @ diag(curvature) @ X with bounded row scratch space."""
+    xp, _, _ = get_namespace_and_device(X)
+    itemsize = 8 if X.dtype == xp.float64 else 4
+    rows_per_tile = max(1, _ARRAY_API_HESSIAN_TILE_BYTES // (X.shape[1] * itemsize))
+    if rows_per_tile >= X.shape[0]:
+        return X.T @ (curvature[:, None] * X)
+    first = X[:rows_per_tile, :]
+    result = first.T @ (curvature[:rows_per_tile, None] * first)
+    for start in range(rows_per_tile, X.shape[0], rows_per_tile):
+        end = start + rows_per_tile
+        stop = end if end < X.shape[0] else None
+        tile = X[start:stop, :]
+        result += tile.T @ (curvature[start:stop, None] * tile)
+    return result
+
 
 def min_norm_subgradient(alpha, gradient, coef, linear_loss):
     """Component-wise minimum norm subgradient of the loss function.
@@ -82,6 +102,24 @@ def min_norm_subgradient(alpha, gradient, coef, linear_loss):
             "Shapes of 'gradient' and 'coef' must match, dimension must be smaller 3; "
             f"got {gradient.shape=} and {coef.shape=}."
         )
+    xp, _, _ = get_namespace_and_device(coef)
+    if not _is_numpy_namespace(xp):
+        weights, _ = linear_loss.weight_intercept(coef)
+        gradient_weights, intercept_gradient = linear_loss.weight_intercept(gradient)
+        subgradient = xp.where(
+            weights == 0,
+            xp.sign(gradient_weights)
+            * xp.maximum(xp.abs(gradient_weights) - alpha, xp.zeros_like(weights)),
+            gradient_weights + alpha * xp.sign(weights),
+        )
+        if linear_loss.fit_intercept:
+            subgradient = xp.concat(
+                (subgradient, intercept_gradient[..., None]), axis=-1
+            )
+        if gradient.ndim == 1 and linear_loss.base_loss.is_multiclass:
+            subgradient = _ravel(subgradient.T, xp=xp)
+        return subgradient
+
     if gradient.ndim == 1:
         result = gradient.copy()
     else:
@@ -795,6 +833,8 @@ class NewtonCholeskySolver(NewtonSolver):
             nonpositive = xp.astype(curvature <= 0, X.dtype)
             if sample_weight is not None:
                 nonpositive = nonpositive * sample_weight
+            self.grad_pointwise = gradient
+            self.hess_pointwise = xp.abs(curvature)
             self.hessian_warning = bool(xp.sum(nonpositive) / weight_sum > 0.25)
             if self.hessian_warning:
                 return
@@ -802,7 +842,7 @@ class NewtonCholeskySolver(NewtonSolver):
             weights, _ = self.linear_loss.weight_intercept(self.coef)
             self.gradient = X.T @ gradient + self.l2_reg_strength * weights
             curvature = xp.abs(curvature)
-            self.hessian = X.T @ (curvature[:, None] * X)
+            self.hessian = _tiled_sandwich_dot(X, curvature)
             if self.l2_reg_strength > 0:
                 self.hessian += self.l2_reg_strength * xp.eye(
                     X.shape[1], dtype=X.dtype, device=device
@@ -869,7 +909,7 @@ class NewtonCholeskySolver(NewtonSolver):
                     curvature = weighted_probabilities[:, k] * (
                         (1 if k == l else 0) - probabilities[:, l]
                     )
-                    block = design.T @ (curvature[:, None] * design)
+                    block = _tiled_sandwich_dot(design, curvature)
                 row.append(block)
             blocks.append(row)
         hessian = xp.stack([xp.stack(row, axis=2) for row in blocks], axis=1)
@@ -1128,7 +1168,8 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
                 n = n_classes * n_features
             else:
                 n = n_features
-            self.Q_centered = np.empty(shape=(n, n), dtype=X.dtype, order="C")
+            coef_cpu = move_to(self.coef, xp=np, device="cpu")
+            self.Q_centered = np.empty(shape=(n, n), dtype=coef_cpu.dtype, order="C")
 
     def update_gradient_hessian(self, X, y, sample_weight):
         # Same as NewtonCholesky but without the L2 penalty which is directly passed to
@@ -1138,7 +1179,8 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
         super().update_gradient_hessian(X=X, y=y, sample_weight=sample_weight)
         self.l2_reg_strength = l2_reg
 
-        if not self.linear_loss.base_loss.is_multiclass:
+        xp, _, _ = get_namespace_and_device(X)
+        if _is_numpy_namespace(xp) and not self.linear_loss.base_loss.is_multiclass:
             # For non-canonical link functions and far away from the optimum, the
             # pointwise hessian can be negative.
             # We need non-negative hessians as we take the square root.
@@ -1180,6 +1222,44 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
             self.use_fallback_lbfgs_solve = True
             return
 
+        xp, _, device = get_namespace_and_device(X)
+        if _is_numpy_namespace(xp):
+            self._inner_solve_numpy(X)
+            return
+
+        # The compiled Gram solver needs CPU arrays. Its y argument is only
+        # used for the squared norm, so transfer one scalar for that statistic.
+        if self.linear_loss.base_loss.is_multiclass:
+            y_norm = X.shape[0] ** 0.5
+        else:
+            h = self.hess_pointwise
+            safe_h = xp.where(h != 0, h, xp.ones_like(h))
+            y_cd = self.raw_prediction - xp.where(
+                h != 0, self.grad_pointwise / safe_h, xp.zeros_like(h)
+            )
+            if self.linear_loss.fit_intercept:
+                y_cd = y_cd - xp.sum(y_cd * h) / xp.sum(h)
+            y_norm = float(xp.linalg.vector_norm(y_cd * xp.sqrt(h)))
+
+        coef, gradient, hessian = self.coef, self.gradient, self.hessian
+        self.coef, self.gradient, self.hessian = move_to(
+            coef, gradient, hessian, xp=np, device="cpu"
+        )
+        # Some backends expose read-only NumPy views via DLPack.
+        self.gradient = self.gradient.copy()
+        if self.linear_loss.base_loss.is_multiclass:
+            self.hessian = self.hessian.copy()
+        try:
+            self._inner_solve_numpy(X, y_cd=np.array([y_norm], dtype=self.coef.dtype))
+            step = move_to(self.coef_newton, xp=xp, device=device)
+            new_gradient = move_to(self.gradient, xp=xp, device=device)
+        finally:
+            self.coef, self.gradient, self.hessian = coef, gradient, hessian
+        self.coef_newton = step
+        self.gradient = new_gradient
+        self.gradient_times_newton = self.gradient @ step
+
+    def _inner_solve_numpy(self, X, y_cd=None):
         n_samples, n_features = X.shape
         gradient, hessian = self.prepare_gradient_hessian()
         # TODO: Pass correct y=b (see NewtonCDSolver), or at least y=||b||_2^2.
@@ -1281,19 +1361,20 @@ class NewtonCDGramSolver(NewtonCholeskySolver):
         # This gives
         #   y' diag(h) X c = q' c
         #   y = -g / h + X coef
-        if self.linear_loss.base_loss.is_multiclass:
-            # TODO(newton-cd): This is still the simple solution.
-            # Consider to pass correct y_cd=b (see NewtonCDSolver), or ensure at least
-            # ||y||_2 = ||b||_2.
-            y_cd = np.ones(shape=n_samples, dtype=X.dtype)
-        else:
-            y_cd = self.raw_prediction.copy()
-            mask = self.hess_pointwise != 0
-            y_cd[mask] -= self.grad_pointwise[mask] / self.hess_pointwise[mask]
-            if self.linear_loss.fit_intercept:
-                # As if applying _pre_fit(X, y_cd, ..).
-                y_cd -= np.average(y_cd, axis=0, weights=self.hess_pointwise)
-            y_cd *= np.sqrt(self.hess_pointwise)
+        if y_cd is None:
+            if self.linear_loss.base_loss.is_multiclass:
+                # TODO(newton-cd): This is still the simple solution.
+                # Pass the correct y_cd=b (see NewtonCDSolver), or at least ensure
+                # ||y||_2 = ||b||_2.
+                y_cd = np.ones(shape=n_samples, dtype=X.dtype)
+            else:
+                y_cd = self.raw_prediction.copy()
+                mask = self.hess_pointwise != 0
+                y_cd[mask] -= self.grad_pointwise[mask] / self.hess_pointwise[mask]
+                if self.linear_loss.fit_intercept:
+                    # As if applying _pre_fit(X, y_cd, ..).
+                    y_cd -= np.average(y_cd, axis=0, weights=self.hess_pointwise)
+                y_cd *= np.sqrt(self.hess_pointwise)
 
         with warnings.catch_warnings():
             # Ignore warnings that add little information for users.

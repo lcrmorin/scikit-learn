@@ -360,9 +360,10 @@ def test_tags(estimator):
 
     if hasattr(estimator, "l1_ratio"):
         estimator.set_params(solver="auto", l1_ratio=1)
+        assert estimator.__sklearn_tags__().array_api_support is True
     else:
         estimator.set_params(solver="auto", l1_ratios=(1,))
-    assert estimator.__sklearn_tags__().array_api_support is False
+        assert estimator.__sklearn_tags__().array_api_support is False
 
 
 @pytest.mark.parametrize("coo_container", COO_CONTAINERS)
@@ -3491,3 +3492,49 @@ def test_newton_cholesky_array_api_multinomial(
         atol=2e-5,
         rtol=1e-4,
     )
+
+
+@pytest.mark.parametrize(
+    "namespace, device_name",
+    [("torch", "cpu"), ("torch", "cuda"), ("array_api_strict", "device1")],
+)
+@pytest.mark.parametrize("n_classes", [2, 3])
+@pytest.mark.parametrize("l1_ratio", [0.5, 1.0])
+@pytest.mark.parametrize("fit_intercept", [False, True])
+def test_newton_cd_gram_array_api_auto(
+    namespace, device_name, n_classes, l1_ratio, fit_intercept, monkeypatch
+):
+    monkeypatch.setattr(
+        "sklearn.linear_model._glm._newton_solver._ARRAY_API_HESSIAN_TILE_BYTES",
+        4096,
+    )
+    xp, device = _array_api_for_tests(namespace, device_name, "float64")
+    X, y = make_classification(
+        n_samples=300,
+        n_features=8,
+        n_informative=5,
+        n_redundant=0,
+        n_classes=n_classes,
+        random_state=42,
+    )
+    sample_weight = np.linspace(0, 2, len(y))
+    kwargs = {
+        "solver": "auto",
+        "alpha": 5,
+        "l1_ratio": l1_ratio,
+        "tol": 1e-7,
+        "fit_intercept": fit_intercept,
+    }
+    reference = LogisticRegression(**kwargs).fit(X, y, sample_weight=sample_weight)
+    X_xp, y_xp, sw_xp = (xp.asarray(a, device=device) for a in (X, y, sample_weight))
+    with config_context(array_api_dispatch=True):
+        fitted = LogisticRegression(**kwargs).fit(X_xp, y_xp, sample_weight=sw_xp)
+        probabilities = fitted.predict_proba(X_xp)
+    assert fitted.solver_ == reference.solver_ == "newton-cd-gram"
+    assert (
+        array_device(fitted.coef_) == array_device(probabilities) == array_device(X_xp)
+    )
+    assert_allclose(
+        _convert_to_numpy(probabilities, xp), reference.predict_proba(X), atol=1e-6
+    )
+    assert_allclose(_convert_to_numpy(fitted.coef_, xp), reference.coef_, atol=1e-6)
