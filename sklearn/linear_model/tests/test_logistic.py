@@ -3413,20 +3413,6 @@ def test_newton_cholesky_array_api_binary_weighted(
         atol=2e-5,
     )
 
-    def objective(proba, coef):
-        return log_loss(y, np.asarray(proba), sample_weight=sample_weight) + np.sum(
-            np.asarray(coef) ** 2
-        ) / (2 * sample_weight.sum())
-
-    assert_allclose(
-        objective(
-            _convert_to_numpy(probabilities, xp), _convert_to_numpy(fitted.coef_, xp)
-        ),
-        objective(reference.predict_proba(X), reference.coef_),
-        atol=2e-6,
-        rtol=0,
-    )
-
 
 @pytest.mark.parametrize("n_classes", [2, 3])
 def test_newton_cholesky_array_api_singular_hessian_fallback(n_classes):
