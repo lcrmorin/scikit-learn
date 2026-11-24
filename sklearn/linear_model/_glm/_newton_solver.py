@@ -356,9 +356,8 @@ class NewtonSolver(ABC):
         # line search parameters
         ls_converged = False
         sigma = 0.00048828125  # 1/2**11, also called c1
-        # Remember: dtype follows X, also the dtype of self.loss_value. For Array API
-        # support, self.loss_value might be float instead of np.floatXX.
         xp, _, _ = get_namespace_and_device(X)
+        # Use the input dtype's precision even though the loss is a Python float.
         eps = 16 * xp.finfo(X.dtype).eps
         alpha = 1  # initial step size, Newton methods should always try 1 first.
 
@@ -426,14 +425,12 @@ class NewtonSolver(ABC):
             # 2. Tiny gradient / Armijo term.
             # If we are already close to the minimum, gradient and Armijo term are
             # tiny. It is best to use a Newton step length alpha = 1.
-            if i == 0 and abs(float(armijo_term)) <= self.tol:
+            if i == 0 and abs(armijo_term) <= self.tol:
                 # Note that final convergence is checked with the infinity norm.
                 mnsg = min_norm_subgradient(
                     self.l1_reg_strength, self.gradient, self.coef, self.linear_loss
                 )  # equals gradient if l1_reg_strength = 0.
-                g_max_abs = float(
-                    xp.linalg.vector_norm(_ravel(mnsg, xp=xp), ord=np.inf)
-                )
+                g_max_abs = xp.linalg.vector_norm(_ravel(mnsg, xp=xp), ord=np.inf)
                 check = g_max_abs <= self.tol
                 if is_verbose:
                     print(
@@ -445,8 +442,8 @@ class NewtonSolver(ABC):
                     break
             # 3. Deal with differences around machine precision.
             # 3.1 Check relative loss difference ~ machine precision
-            tiny_loss = abs(float(self.loss_value_old * eps))
-            abs_loss_improvement = abs(float(loss_improvement))
+            tiny_loss = abs(self.loss_value_old * eps)
+            abs_loss_improvement = abs(loss_improvement)
             check = abs_loss_improvement <= tiny_loss
             if is_verbose:
                 print(
@@ -539,7 +536,7 @@ class NewtonSolver(ABC):
         mnsg = min_norm_subgradient(
             self.l1_reg_strength, self.gradient, self.coef, self.linear_loss
         )  # equals gradient if l1_reg_strength = 0.
-        g_max_abs = float(xp.linalg.vector_norm(_ravel(mnsg, xp=xp), ord=np.inf))
+        g_max_abs = xp.linalg.vector_norm(_ravel(mnsg, xp=xp), ord=np.inf)
         check = g_max_abs <= self.tol
         if self.verbose:
             if self.l1_reg_strength == 0:
@@ -831,7 +828,8 @@ class NewtonCholeskySolver(NewtonSolver):
         if sample_weight is not None:
             weighted_probabilities = weighted_probabilities * sample_weight[:, None]
 
-        # Each class-pair block is X.T @ diag(w * p_k * (delta_kl - p_l)) @ X.
+        # Each block is a weighted Gram matrix of the design. For classes k and l,
+        # the weights are w * p_k * (delta_kl - p_l) / sum(w).
         blocks = []
         for k in range(n_classes):
             row = []
@@ -882,8 +880,8 @@ class NewtonCholeskySolver(NewtonSolver):
             # class to zero, for all features including the intercept.
             # Note that coef was already dealt with in setup.
             n_classes = self.linear_loss.base_loss.n_classes
-            n_dof = self.coef.shape[0] // n_classes  # degree of freedom per class
-            n = self.coef.shape[0] - n_dof  # effective size
+            n_dof = self.coef.shape[0] // n_classes
+            n = self.coef.shape[0] - n_dof  # Exclude the reference class.
             self.gradient[n_classes - 1 :: n_classes] = 0
             self.hessian[n_classes - 1 :: n_classes, :] = 0
             self.hessian[:, n_classes - 1 :: n_classes] = 0

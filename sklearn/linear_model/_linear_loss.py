@@ -419,9 +419,6 @@ class LinearModelLoss:
             if self.fit_intercept:
                 grad[-1] = xp.sum(grad_pointwise)
         else:
-            # The final value of `grad` needs to be in the `numpy` namespace
-            # because the relevant `scipy.optimize` functions do not currently
-            # support the array API.
             grad = np.empty((n_classes, n_dof), dtype=weights.dtype, order="F")
             # grad_pointwise.shape = (n_samples, n_classes)
             grad_X = grad_pointwise.T @ X
