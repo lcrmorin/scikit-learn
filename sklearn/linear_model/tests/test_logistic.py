@@ -2790,6 +2790,7 @@ def test_logistic_regression_array_api_compliance(
     device_name,
     dtype_name,
 ):
+    """Check fitted attributes and predictions against NumPy across backends."""
     xp, device = _array_api_for_tests(array_namespace, device_name, dtype_name)
     X_np = iris.data.astype(dtype_name, copy=True)
     n_samples, _ = X_np.shape
@@ -3378,9 +3379,10 @@ def test_intercept_scaling_deprecated(est, intercept_scaling):
 )
 @pytest.mark.parametrize("fit_intercept", [False, True])
 @pytest.mark.parametrize("dtype_name", ["float32", "float64"])
-def test_newton_cholesky_array_api_binary_weighted(
+def test_newton_cholesky_array_api_binary(
     namespace, device_name, fit_intercept, dtype_name
 ):
+    """Check weighted binary fits against NumPy with and without an intercept."""
     xp, device = _array_api_for_tests(namespace, device_name, dtype_name)
     X, y = make_classification(
         n_samples=200, n_features=5, n_redundant=2, random_state=42
@@ -3415,7 +3417,8 @@ def test_newton_cholesky_array_api_binary_weighted(
 
 
 @pytest.mark.parametrize("n_classes", [2, 3])
-def test_newton_cholesky_array_api_singular_hessian_fallback(n_classes):
+def test_newton_cholesky_array_api_singular(n_classes):
+    """Check that an exactly singular Hessian triggers the L-BFGS fallback."""
     xp, device = _array_api_for_tests("torch", "cpu", "float64")
     X, y = make_classification(
         n_samples=100,
@@ -3449,6 +3452,7 @@ def test_newton_cholesky_array_api_singular_hessian_fallback(n_classes):
 def test_newton_cholesky_array_api_multinomial(
     namespace, device_name, dtype_name, fit_intercept, alpha
 ):
+    """Check weighted multiclass fits with and without L2 or an intercept."""
     xp, device = _array_api_for_tests(namespace, device_name, dtype_name)
     X, y = make_classification(
         n_samples=240,

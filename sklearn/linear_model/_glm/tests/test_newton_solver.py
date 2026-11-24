@@ -10,11 +10,7 @@ import pytest
 from scipy import sparse
 
 from sklearn import config_context
-from sklearn._loss import (
-    HalfMultinomialLoss,
-    HalfPoissonLoss,
-    HalfSquaredError,
-)
+from sklearn._loss import HalfMultinomialLoss, HalfPoissonLoss, HalfSquaredError
 from sklearn._loss.loss import HalfPoissonLossArrayAPI
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model._cd_fast import (
@@ -40,7 +36,8 @@ from sklearn.utils.extmath import softmax
 from sklearn.utils.fixes import parse_version, sp_version
 
 
-def test_newton_cholesky_gradient_with_zero_curvature_array_api():
+def test_newton_cholesky_array_api_zero_curvature():
+    """Refresh the full gradient, including the intercept, at zero curvature."""
     xp, device = _array_api_for_tests("array_api_strict", "device1", "float64")
     X = xp.asarray([[1.0], [2.0]], device=device)
     y = xp.asarray([1.0, 2.0], device=device)
