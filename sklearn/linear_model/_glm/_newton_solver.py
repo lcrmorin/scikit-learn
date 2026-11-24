@@ -24,9 +24,11 @@ from sklearn.linear_model._cd_fast import (
 )
 from sklearn.linear_model._linear_loss import (
     LinearModelLoss,
+    sandwich_dot,
 )
 from sklearn.linear_model._ridge import _SingularMatrixError, _solve_spd
 from sklearn.utils._array_api import (
+    _add_to_diagonal,
     _is_numpy_namespace,
     _ravel,
     get_namespace_and_device,
@@ -444,11 +446,12 @@ class NewtonSolver(ABC):
             # 3. Deal with differences around machine precision.
             # 3.1 Check relative loss difference ~ machine precision
             tiny_loss = abs(float(self.loss_value_old * eps))
-            check = abs(float(loss_improvement)) <= tiny_loss
+            abs_loss_improvement = abs(float(loss_improvement))
+            check = abs_loss_improvement <= tiny_loss
             if is_verbose:
                 print(
                     "      check loss |improvement| <= eps * |loss_old|:"
-                    f" {abs(float(loss_improvement))} <= {tiny_loss} {check}"
+                    f" {abs_loss_improvement} <= {tiny_loss} {check}"
                 )
             if check:
                 # 3.2 Check the approximate Armijo condition, i.e. the first inequality
@@ -753,12 +756,10 @@ class NewtonCholeskySolver(NewtonSolver):
             self.hess_pointwise = np.empty_like(self.grad_pointwise)
 
     def update_gradient_hessian(self, X, y, sample_weight):
-        xp, _, device = get_namespace_and_device(X)
+        xp, _, _ = get_namespace_and_device(X)
         if not _is_numpy_namespace(xp):
             if self.linear_loss.base_loss.is_multiclass:
-                self._update_multinomial_gradient_hessian(
-                    X, y, sample_weight, xp, device
-                )
+                self._update_multinomial_gradient_hessian(X, y, sample_weight, xp)
                 return
             gradient, curvature = self.linear_loss.base_loss.gradient_hessian(
                 y_true=y,
@@ -766,28 +767,22 @@ class NewtonCholeskySolver(NewtonSolver):
                 sample_weight=sample_weight,
             )
             weight_sum = X.shape[0] if sample_weight is None else xp.sum(sample_weight)
-            gradient = gradient / weight_sum
-            curvature = curvature / weight_sum
             nonpositive = xp.astype(curvature <= 0, X.dtype)
             if sample_weight is not None:
                 nonpositive = nonpositive * sample_weight
             self.hessian_warning = bool(xp.sum(nonpositive) / weight_sum > 0.25)
             weights, _ = self.linear_loss.weight_intercept(self.coef)
-            self.gradient = X.T @ gradient + self.l2_reg_strength * weights
-            if self.linear_loss.fit_intercept:
-                self.gradient = xp.concat(
-                    (self.gradient, xp.reshape(xp.sum(gradient), (1,)))
-                )
+            self.gradient = self.linear_loss._assemble_gradient(
+                self.coef, X, gradient / weight_sum, weights, self.l2_reg_strength, xp
+            )
 
             if self.hessian_warning:
                 return
 
-            curvature = xp.abs(curvature)
-            self.hessian = X.T @ (curvature[:, None] * X)
+            curvature = xp.abs(curvature) / weight_sum
+            self.hessian = sandwich_dot(X, curvature)
             if self.l2_reg_strength > 0:
-                self.hessian += self.l2_reg_strength * xp.eye(
-                    X.shape[1], dtype=X.dtype, device=device
-                )
+                _add_to_diagonal(self.hessian, self.l2_reg_strength, xp)
             if self.linear_loss.fit_intercept:
                 cross = X.T @ curvature
                 last_row = xp.concat((cross, xp.reshape(xp.sum(curvature), (1,))))
@@ -814,7 +809,7 @@ class NewtonCholeskySolver(NewtonSolver):
             hess_pointwise_out=self.hess_pointwise,
         )
 
-    def _update_multinomial_gradient_hessian(self, X, y, sample_weight, xp, device):
+    def _update_multinomial_gradient_hessian(self, X, y, sample_weight, xp):
         gradient, probabilities = self.linear_loss.base_loss.gradient_proba(
             y_true=y,
             raw_prediction=self.raw_prediction,
@@ -822,7 +817,7 @@ class NewtonCholeskySolver(NewtonSolver):
         )
         weight_sum = X.shape[0] if sample_weight is None else xp.sum(sample_weight)
         weights, _ = self.linear_loss.weight_intercept(self.coef)
-        self.gradient = self.linear_loss._assemble_multinomial_gradient(
+        self.gradient = self.linear_loss._assemble_gradient(
             self.coef, X, gradient / weight_sum, weights, self.l2_reg_strength, xp
         )
         self.hessian_warning = False
@@ -847,7 +842,7 @@ class NewtonCholeskySolver(NewtonSolver):
                     curvature = weighted_probabilities[:, k] * (
                         (1 if k == l else 0) - probabilities[:, l]
                     )
-                    block = design.T @ (curvature[:, None] * design)
+                    block = sandwich_dot(design, curvature)
                 row.append(block)
             blocks.append(row)
         # Stack as (feature, class, feature, class) so flattening each axis
@@ -859,7 +854,7 @@ class NewtonCholeskySolver(NewtonSolver):
             penalty = xp.full_like(self.coef, self.l2_reg_strength)
             if self.linear_loss.fit_intercept:
                 penalty[-n_classes:] = 0
-            self.hessian += xp.eye(size, dtype=X.dtype, device=device) * penalty
+            _add_to_diagonal(self.hessian, penalty, xp)
 
     def prepare_gradient_hessian(self):
         """Prepare gradient and hessian, in particular for the multiclass case.
@@ -955,9 +950,7 @@ class NewtonCholeskySolver(NewtonSolver):
                     self.coef_newton = _solve_spd(hessian, -gradient, xp)
                 if self.is_multinomial_no_penalty:
                     n_classes = self.linear_loss.base_loss.n_classes
-                    n_dof = (
-                        self.coef.shape[0] // n_classes
-                    )  # degree of freedom per class
+                    n_dof = self.coef.shape[0] // n_classes
                     reduced = xp.reshape(self.coef_newton, (n_dof, n_classes - 1))
                     self.coef_newton = _ravel(
                         xp.concat((reduced, xp.zeros_like(reduced[:, :1])), axis=1),

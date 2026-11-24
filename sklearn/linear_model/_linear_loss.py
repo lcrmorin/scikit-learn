@@ -405,17 +405,10 @@ class LinearModelLoss:
         # L-BFGS passes NumPy coefficients and needs a NumPy gradient. Newton
         # passes backend-native coefficients and can keep the gradient on device.
         coef_xp, _ = get_namespace(coef)
-        if not _is_numpy_namespace(coef_xp) and self.base_loss.is_multiclass:
-            grad = self._assemble_multinomial_gradient(
+        if not _is_numpy_namespace(coef_xp):
+            return loss, self._assemble_gradient(
                 coef, X, grad_pointwise, weights, l2_reg_strength, xp
             )
-            return loss, grad
-        if not _is_numpy_namespace(coef_xp):
-            grad = xp.empty_like(coef)
-            grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights
-            if self.fit_intercept:
-                grad[-1] = xp.sum(grad_pointwise)
-            return loss, grad
 
         if not self.base_loss.is_multiclass:
             grad = np.empty_like(coef, dtype=weights.dtype)
@@ -444,9 +437,14 @@ class LinearModelLoss:
 
         return loss, grad
 
-    def _assemble_multinomial_gradient(
-        self, coef, X, grad_pointwise, weights, l2_reg_strength, xp
-    ):
+    def _assemble_gradient(self, coef, X, grad_pointwise, weights, l2_reg_strength, xp):
+        if not self.base_loss.is_multiclass:
+            grad = xp.empty_like(coef, dtype=weights.dtype)
+            grad[: X.shape[1]] = X.T @ grad_pointwise + l2_reg_strength * weights
+            if self.fit_intercept:
+                grad[-1] = xp.sum(grad_pointwise)
+            return grad
+
         grad = grad_pointwise.T @ X + l2_reg_strength * weights
         if self.fit_intercept:
             grad = xp.concat((grad, xp.sum(grad_pointwise, axis=0)[:, None]), axis=1)
@@ -514,28 +512,22 @@ class LinearModelLoss:
         sw_sum = n_samples if sample_weight is None else xp.sum(sample_weight)
         grad_pointwise /= sw_sum
 
+        if not _is_numpy_namespace(xp):
+            return self._assemble_gradient(
+                coef, X, grad_pointwise, weights, l2_reg_strength, xp
+            )
         if not self.base_loss.is_multiclass:
             grad = xp.empty_like(coef, dtype=weights.dtype, device=device)
             grad[:n_features] = X.T @ grad_pointwise + l2_reg_strength * weights
             if self.fit_intercept:
                 grad[-1] = xp.sum(grad_pointwise)
             return grad
-        else:
-            if _is_numpy_namespace(xp):
-                grad = np.empty((n_classes, n_dof), dtype=weights.dtype, order="F")
-            else:
-                grad = xp.empty((n_classes, n_dof), dtype=weights.dtype, device=device)
-            # gradient.shape = (n_samples, n_classes)
-            grad[:, :n_features] = grad_pointwise.T @ X + l2_reg_strength * weights
-            if self.fit_intercept:
-                grad[:, -1] = xp.sum(grad_pointwise, axis=0)
-            if coef.ndim == 1:
-                if _is_numpy_namespace(xp):
-                    return grad.ravel(order="F")
-                else:
-                    return _ravel(grad.T, xp=xp)
-            else:
-                return grad
+
+        grad = np.empty((n_classes, n_dof), dtype=weights.dtype, order="F")
+        grad[:, :n_features] = grad_pointwise.T @ X + l2_reg_strength * weights
+        if self.fit_intercept:
+            grad[:, -1] = xp.sum(grad_pointwise, axis=0)
+        return grad.ravel(order="F") if coef.ndim == 1 else grad
 
     def gradient_hessian(
         self,
