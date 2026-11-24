@@ -9,7 +9,13 @@ import numpy as np
 import pytest
 from scipy import sparse
 
-from sklearn._loss import HalfMultinomialLoss, HalfPoissonLoss, HalfSquaredError
+from sklearn import config_context
+from sklearn._loss import (
+    HalfMultinomialLoss,
+    HalfPoissonLoss,
+    HalfSquaredError,
+)
+from sklearn._loss.loss import HalfPoissonLossArrayAPI
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model._cd_fast import (
     enet_coordinate_descent_gram,
@@ -17,15 +23,40 @@ from sklearn.linear_model._cd_fast import (
 )
 from sklearn.linear_model._glm._newton_solver import (
     NewtonCDGramSolver,
+    NewtonCholeskySolver,
     min_norm_subgradient,
 )
 from sklearn.linear_model._linear_loss import (
     LinearModelLoss,
     Multinomial_LDL_Decomposition,
 )
-from sklearn.utils._testing import assert_allclose, assert_array_equal
+from sklearn.utils._array_api import _convert_to_numpy
+from sklearn.utils._testing import (
+    _array_api_for_tests,
+    assert_allclose,
+    assert_array_equal,
+)
 from sklearn.utils.extmath import softmax
 from sklearn.utils.fixes import parse_version, sp_version
+
+
+def test_newton_cholesky_gradient_with_zero_curvature_array_api():
+    xp, device = _array_api_for_tests("array_api_strict", "device1", "float64")
+    X = xp.asarray([[1.0], [2.0]], device=device)
+    y = xp.asarray([1.0, 2.0], device=device)
+    coef = xp.asarray([-1000.0, 0.0], device=device)
+    linear_loss = LinearModelLoss(
+        base_loss=HalfPoissonLossArrayAPI(xp=xp, device=device), fit_intercept=True
+    )
+    solver = NewtonCholeskySolver(coef=coef, linear_loss=linear_loss)
+    # The predicted rates underflow to zero, while the gradient is finite.
+    solver.raw_prediction = X @ coef[:-1] + coef[-1]
+
+    with config_context(array_api_dispatch=True):
+        solver.update_gradient_hessian(X, y, sample_weight=None)
+
+    assert solver.hessian_warning
+    assert_allclose(_convert_to_numpy(solver.gradient, xp), [-2.5, -1.5])
 
 
 def test_min_norm_subgradient_raises():

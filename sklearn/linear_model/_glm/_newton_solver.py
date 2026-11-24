@@ -771,11 +771,16 @@ class NewtonCholeskySolver(NewtonSolver):
             if sample_weight is not None:
                 nonpositive = nonpositive * sample_weight
             self.hessian_warning = bool(xp.sum(nonpositive) / weight_sum > 0.25)
+            weights, _ = self.linear_loss.weight_intercept(self.coef)
+            self.gradient = X.T @ gradient + self.l2_reg_strength * weights
+            if self.linear_loss.fit_intercept:
+                self.gradient = xp.concat(
+                    (self.gradient, xp.reshape(xp.sum(gradient), (1,)))
+                )
+
             if self.hessian_warning:
                 return
 
-            weights, _ = self.linear_loss.weight_intercept(self.coef)
-            self.gradient = X.T @ gradient + self.l2_reg_strength * weights
             curvature = xp.abs(curvature)
             self.hessian = X.T @ (curvature[:, None] * X)
             if self.l2_reg_strength > 0:
@@ -783,9 +788,6 @@ class NewtonCholeskySolver(NewtonSolver):
                     X.shape[1], dtype=X.dtype, device=device
                 )
             if self.linear_loss.fit_intercept:
-                self.gradient = xp.concat(
-                    (self.gradient, xp.reshape(xp.sum(gradient), (1,)))
-                )
                 cross = X.T @ curvature
                 last_row = xp.concat((cross, xp.reshape(xp.sum(curvature), (1,))))
                 self.hessian = xp.concat(

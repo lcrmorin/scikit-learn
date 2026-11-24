@@ -2771,7 +2771,7 @@ def test_use_legacy_attributes_deprecated(value):
         lr.fit(X, y)
 
 
-@pytest.mark.parametrize("solver", ["auto", "lbfgs", "newton-cg"])
+@pytest.mark.parametrize("solver", ["auto", "lbfgs", "newton-cg", "newton-cholesky"])
 @pytest.mark.parametrize("binary", [False, True])
 @pytest.mark.parametrize("use_str_y", [False, True])
 @pytest.mark.parametrize("use_sample_weight", [False, True])
